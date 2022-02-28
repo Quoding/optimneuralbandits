@@ -18,7 +18,7 @@ import os
 
 sys.path.append("..")
 sys.path.append("viz")
-from optimneuralucb import DENeuralTSDiag, LenientDENeuralTSDiag
+from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
 import viz_config
 
 # %%

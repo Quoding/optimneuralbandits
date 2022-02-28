@@ -1,8 +1,15 @@
+# Custom
+*.pth
+testing/datasets/
+testing/images/
+testing/saves
+.vscode
+neuralts
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
 # C extensions
 *.so
 

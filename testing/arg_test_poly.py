@@ -18,7 +18,7 @@ import os
 
 sys.path.append("..")
 sys.path.append("../viz")
-from optimneuralucb import DENeuralTSDiag, LenientDENeuralTSDiag
+from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
 import viz_config
 
 # %%
@@ -83,7 +83,6 @@ logging.info(X.shape)
 p = torch.tensor([1 / len(set_existing_vecs)] * len(set_existing_vecs))
 
 
-# %%
 class Network(nn.Module):
     def __init__(self, dim, n_hidden_layers, hidden_size=100):
         super().__init__()
@@ -410,9 +409,6 @@ for i in range(n_trials):
         logging.info(
             f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, ratio of existing vecs with pattern found: {percent_found_existing_vecs_with_pat}, n_inter: {n_inter}, loss: {loss}"
         )
-
-
-
 
 
 # %%
