@@ -1,15 +1,21 @@
+import argparse
+import json
+import os
+import random
+from math import isnan
+from typing import Type
+import logging
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
 from detorch import DE, Policy, Strategy
-from detorch.config import default_config, Config
-from typing import Type
+from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
-import numpy as np
-from math import isnan
-import random
-import os
 
 device = torch.device("cuda")
+logging.basicConfig(level=logging.INFO)
+torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
 
 class Network(nn.Module):
@@ -30,6 +36,11 @@ class Network(nn.Module):
 
 
 class PullPolicy(Policy):
+    """
+    Pull policy for DE. Utility class to do DE
+    optimization over dataset feature vectors
+    """
+
     bounds = [0, 1]
 
     def __init__(self, eval_fn, p, set_existing_vecs):
@@ -41,6 +52,8 @@ class PullPolicy(Policy):
         self.activation_grad = None
 
     def evaluate(self):
+        """Evaluate current `self` (a tensor)
+        to find its value according to `eval_fn`"""
         self.transform()
         sample_r, activation_grad, _, _ = self.eval_fn(self.params.data)
         self.activation_grad = activation_grad
@@ -52,16 +65,7 @@ class PullPolicy(Policy):
         self.params = nn.Parameter(vec, requires_grad=False)
 
 
-class DEConfig:
-    n_step: int = 16
-    population_size: int = 32
-    differential_weight: float = 1
-    crossover_probability: float = 0.9
-    strategy: Strategy = Strategy.best2bin
-    seed: int = 42
-
-
-def risk_reward_fn(vec, X, y):
+def compute_relative_risk(vec, X, y):
     # Determined by polypharmacy definition
     if vec.sum() < 5:
         return 0
@@ -93,18 +97,27 @@ def risk_reward_fn(vec, X, y):
 
 
 def change_to_closest_existing_vector(vec, set_existing_vecs):
+    """1-NN search of `vec` in `set_existing_vecs`
+
+    Args:
+        vec (torch.Tensor): base vector
+        set_existing_vecs (torch.Tensor): neighboring vectors in which to do the search
+
+    Returns:
+        torch.Tensor: nearest neighbor of `vec` in `set_existing_vecs`
+    """
     dists = torch.norm(vec - set_existing_vecs, dim=1, p=1)
     knn_idx = dists.topk(1, largest=False).indices[0]
-    return set_existing_vecs[knn_idx]
+    return set_existing_vecs[knn_idx], knn_idx
 
 
-def gen_warmup_vecs_and_rewards(n_warmup, X, y, p, set_existing_vecs):
+def gen_warmup_vecs_and_rewards(n_warmup, X, y, p):
     vecs = []
     rewards = []
     for i in range(n_warmup):
         idx = p.multinomial(num_samples=1).item()
-        vec = set_existing_vecs[idx]
-        reward = risk_reward_fn(vec, X, y)
+        vec = X[idx]
+        reward = compute_relative_risk(vec, X, y)
         vecs.append(vec.tolist())
         rewards.append([reward])
 
@@ -113,14 +126,25 @@ def gen_warmup_vecs_and_rewards(n_warmup, X, y, p, set_existing_vecs):
     return vecs, rewards
 
 
-def reseed_de(de_config):
+def reseed_de(de_config, seed):
     # Bypass default config of DE and modify seed so populations are different from invocation to invocation
-    random.seed(os.urandom(100))
-    de_config.seed = random.randint(0, 100000)
+    de_config.seed = seed
 
 
-def find_best_member(agent_eval_fn, de_config, proba, set_init_vecs):
-    reseed_de(de_config)
+def find_best_member(agent_eval_fn, de_config, proba, set_init_vecs, seed):
+    """Run DE to find the best vector for the current agent
+
+    Args:
+        agent_eval_fn (function): agent's evaluation function
+        de_config (DEConfig): DE Configuration
+        proba (torch.Tensor): initialization probas for vectors in DE
+        set_init_vecs (torch.Tensor): available vectors to initialize from
+        seed (int): seed to set up DE
+
+    Returns:
+        torch.Tensor: Best member from DE's population
+    """
+    reseed_de(de_config, seed)
     config = Config(default_config)
 
     @config("policy")
@@ -165,3 +189,127 @@ def compute_jaccard(found_solution, true_solution):
         n_in_inter / (len(found_solution) + len(true_solution) - n_in_inter),
         n_in_inter,
     )
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train an agent on a given dataset")
+    parser.add_argument(
+        "-T", "--trials", type=int, required=True, help="Number of trials for the agent"
+    )
+    parser.add_argument("-d", "--dataset", required=True, help="Path to dataset")
+    parser.add_argument(
+        "-t",
+        "--threshold",
+        type=float,
+        required=True,
+        help="Good and bad action threshold",
+    )
+    parser.add_argument(
+        "-s",
+        "--seed",
+        type=int,
+        default=42,
+        help="Set random seed base for training (will be added to current trial number to diversify DE)",
+    )
+    parser.add_argument(
+        "-w",
+        "--width",
+        type=int,
+        default=100,
+        help="Width of the NN (number of neurons)",
+    )
+    parser.add_argument(
+        "-l",
+        "--layers",
+        type=int,
+        default=1,
+        help="Number of hidden layers",
+    )
+    parser.add_argument(
+        "-r",
+        "--reg",
+        type=float,
+        default=1,
+        help="Regularization factor",
+    )
+    parser.add_argument(
+        "-e",
+        "--exploration",
+        type=float,
+        default=1,
+        help="Exploration multiplier",
+    )
+    parser.add_argument(
+        "--n_optim_steps",
+        type=int,
+        default=100,
+        help="Regularization factor for training",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=1e-2,
+        help="Learning rate for SGD / Adam optimizer",
+    )
+
+    parser.add_argument(
+        "--style",
+        type=str,
+        default="ts",
+        choices=["ts", "ucb"],
+        help="Learning rate for SGD / Adam optimizer",
+    )
+
+    parser.add_argument(
+        "--warmup",
+        type=int,
+        default=100,
+        help="Number of warmup steps",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=str,
+        default="saves/",
+        help="Output directory for metrics and agents",
+    )
+    args = parser.parse_args()
+    return args
+
+
+def load_dataset(dataset_path):
+    dataset = pd.read_csv("datasets/combinations/" + dataset_path + ".csv")
+
+    with open("datasets/patterns/" + dataset_path + ".json", "r") as f:
+        patterns = json.load(f)
+
+    features = dataset.iloc[:, :-3]
+    risks = dataset.iloc[:, -3]
+
+    n_obs, n_dim = features.shape
+
+    return features, risks, patterns, n_obs, n_dim
+
+
+def compute_metrics(agent, combis, thresh, pat_vecs, true_sol):
+    sol = agent.find_solution_in_vecs(
+        combis, thresh
+    )  # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
+    sol_pat = agent.find_solution_in_vecs(
+        pat_vecs, thresh
+    )  # Parmis les patrons insérés, combien j'en trouve tels quels (Ratio_p.t.)
+
+    jaccard, n_inter = compute_jaccard(
+        sol, true_sol
+    )  # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
+    percent_found_pat = len(sol_pat) / len(
+        pat_vecs
+    )  # Combien de patrons tels quels j'ai flag ?
+    if len(sol) == 0:
+        ratio_app = 0
+    else:
+        ratio_app = n_inter / len(
+            sol
+        )  # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
+
+    return jaccard, ratio_app, percent_found_pat, n_inter

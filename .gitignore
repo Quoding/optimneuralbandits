@@ -1,8 +1,8 @@
 # Custom
 *.pth
-testing/datasets/
-testing/images/
-testing/saves
+testing/datasets/*
+testing/images/*
+testing/saves/*
 .vscode
 neuralts
 
