@@ -111,6 +111,7 @@ class DENeuralTSDiag:
             mu, g_list = self.compute_activation_and_grad(vec)
             cb = torch.sum(g_list * g_list / self.U)
             cb = torch.sqrt(self.lamdba * cb)
+            logging.info(f"{mu-cb}, {cb} : {thresh}")
             if (mu - cb).item() > thresh:
                 solution.append(vec)
 

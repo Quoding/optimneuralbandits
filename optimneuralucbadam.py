@@ -83,7 +83,8 @@ class DENeuralTSDiag:
 
     def train(self, n_optim_steps, lr=1e-2):
 
-        optimizer = optim.SGD(self.net.parameters(), lr=lr)
+        # optimizer = optim.SGD(self.net.parameters(), lr=lr)
+        optimizer = optim.Adam(self.net.parameters(), lr=lr)
         for _ in range(n_optim_steps):
             self.net.zero_grad()
             optimizer.zero_grad()
@@ -111,6 +112,7 @@ class DENeuralTSDiag:
             mu, g_list = self.compute_activation_and_grad(vec)
             cb = torch.sum(g_list * g_list / self.U)
             cb = torch.sqrt(self.lamdba * cb)
+            logging.info(f"{mu-cb}, {cb} : {thresh}")
             if (mu - cb).item() > thresh:
                 solution.append(vec)
 

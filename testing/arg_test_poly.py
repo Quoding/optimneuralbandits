@@ -1,30 +1,18 @@
 # %%
 import sys
 import numpy as np
-import scipy
-from scipy.stats.contingency import relative_risk
 import pandas as pd
 import json
 import torch
-import torch.nn as nn
-from typing import Type
-from detorch import DE, Policy, Strategy
-from detorch.config import default_config, Config
 import logging
-import matplotlib.pyplot as plt
-from math import isnan
-import random
-import os
+
+from utils import *
 
 sys.path.append("..")
-sys.path.append("../viz")
 from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
-import viz_config
 
 # %%
 torch.set_default_tensor_type("torch.cuda.FloatTensor")
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-cpu = torch.device("cpu")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -34,22 +22,20 @@ run_number = int(sys.argv[3])
 
 epsilon = 0.4
 inv_eps = 1 - epsilon
-bounds = [0, 1]
 
 
 # %%
-logging.info(f"Loading up this dataset: 10000r_{n_dim}c_1o_run{run_number}")
+base = f"10000r_{n_dim}c_1o_run{run_number}"
+logging.info(f"Loading up this dataset: {base}")
 
-df = pd.read_csv(f"datasets/polypharmacie/10000r_{n_dim}c_1o_run{run_number}.csv")
+df = pd.read_csv(f"datasets/polypharmacie/{base}.csv")
 with open(
-    f"datasets/polypharmacie/10000r_{n_dim}c_1o_run{run_number}_config.json",
+    f"datasets/polypharmacie/{base}_config.json",
     "r",
 ) as file:
     config = json.load(file)
 
-with open(
-    f"datasets/polypharmacie/10000r_{n_dim}c_1o_run{run_number}.json", "r"
-) as file:
+with open(f"datasets/polypharmacie/{base}.json", "r") as file:
     pattern_config = json.load(file)
 
 pattern_codes = [
@@ -74,7 +60,7 @@ y = y_df.values.ravel()
 
 X_df.describe()
 X = torch.Tensor(X)
-y = torch.Tensor(y).to(cpu)
+y = torch.Tensor(y)
 set_existing_vecs = torch.unique(X, dim=0)
 
 logging.info(y.shape)
@@ -82,161 +68,12 @@ logging.info(X.shape)
 
 p = torch.tensor([1 / len(set_existing_vecs)] * len(set_existing_vecs))
 
-
-class Network(nn.Module):
-    def __init__(self, dim, n_hidden_layers, hidden_size=100):
-        super().__init__()
-        self.activation = nn.ReLU()
-        self.layers = nn.ModuleList()
-
-        self.layers.append(nn.Linear(dim, hidden_size))
-        for _ in range(n_hidden_layers - 1):
-            self.layers.append(nn.Linear(hidden_size, hidden_size))
-        self.layers.append(nn.Linear(hidden_size, 1))
-
-    def forward(self, x):
-        for layer in self.layers[:-1]:
-            x = self.activation(layer(x))
-        return self.layers[-1](x)
-
-
-class PullPolicy(Policy):
-    def __init__(self, eval_fn):
-        super().__init__()
-        idx = p.multinomial(num_samples=1).item()
-        self.params = nn.Parameter(set_existing_vecs[idx].clone(), requires_grad=False)
-        self.eval_fn = eval_fn
-        self.ucb = None
-
-    def evaluate(self):
-        self.transform()
-        ucb, activation_grad, _, _ = self.eval_fn(self.params.data)
-        self.activation_grad = activation_grad
-        self.ucb = ucb
-        return ucb
-
-    def transform(self):
-        vec = torch.clip(self.params, *bounds).to(device)
-        self.params = nn.Parameter(vec, requires_grad=False)
-
-
-class DEConfig:
-    n_step: int = 16
-    population_size: int = 32
-    differential_weight: float = 1
-    crossover_probability: float = 0.9
-    strategy: Strategy = Strategy.best2bin
-    seed: int = 42
-
-
-def risk_reward_fn(vec):
-    # Determined by polypharmacy definition
-    if vec.sum() < 5:
-        return 0
-
-    vec_indices = torch.where(vec == 1)[0]
-
-    # Exposed
-    rows_exposed = torch.where((X[:, vec_indices] == 1).all(axis=1))[0]
-    rows_control = torch.where((X[:, vec_indices] == 0).any(axis=1))[0]
-    rows_exposed_case = torch.where(y[rows_exposed] == 1)[0]
-    rows_control_case = torch.where(y[rows_control] == 1)[0]
-
-    n_exposed = len(rows_exposed)
-    n_exposed_case = len(rows_exposed_case)
-    n_control = len(rows_control)
-    n_control_case = len(rows_control_case)
-    rr = relative_risk(
-        n_exposed_case, n_exposed, n_control_case, n_control
-    ).relative_risk
-
-    if isnan(rr):
-        # Interpreted as 0 by experts
-        return 0
-
-    elif rr == float("inf"):
-        return 10  # Return something really big, but not inf so it doesn't break the regression
-
-    return rr
-
-
-def change_to_closest_existing_vector(vec):
-    dists = torch.norm(vec - set_existing_vecs, dim=1, p=1)
-    knn_idx = dists.topk(1, largest=False).indices[0]
-    return set_existing_vecs[knn_idx]
-
-
-def gen_warmup_vecs_and_rewards(n_warmup):
-    vecs = []
-    rewards = []
-    for i in range(n_warmup):
-        idx = p.multinomial(num_samples=1).item()
-        vec = set_existing_vecs[idx]
-        reward = risk_reward_fn(vec)
-        vecs.append(vec.tolist())
-        rewards.append([reward])
-
-    vecs = torch.tensor(vecs)
-    rewards = torch.tensor(rewards)
-    return vecs, rewards
-
-
-def reseed_de(de_config):
-    # Bypass default config of DE and modify seed so populations are different from invocation to invocation
-    random.seed(os.urandom(100))
-    de_config.seed = random.randint(0, 100000)
-
-
-def find_best_member(agent_eval_fn, de_config):
-    reseed_de(de_config)
-    config = Config(default_config)
-
-    @config("policy")
-    class PolicyConfig:
-        policy: Type[Policy] = PullPolicy
-        eval_fn: object = agent_eval_fn
-
-    config("de")(de_config)
-
-    de = DE(config)
-    de.train()
-
-    return de.population[de.current_best]
-
-
-def make_deterministic(seed=42):
-    # PyTorch
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-
-    # Numpy
-    np.random.seed(seed)
-
-    # Built-in Python
-    random.seed(seed)
-
-
-def compute_jaccard(found_solution, true_solution):
-    found_sol_list = found_solution.tolist()
-    true_sol_list = true_solution.tolist()
-
-    n_in_inter = 0
-
-    for vec in found_sol_list:
-        n_in_inter += vec in true_sol_list
-
-    return (
-        n_in_inter / (len(found_solution) + len(true_solution) - n_in_inter),
-        n_in_inter,
-    )
-
+make_deterministic(run_number)
 
 # %%
 risks = []
 for vec in set_existing_vecs:
-    risks.append(risk_reward_fn(vec))
+    risks.append(risk_reward_fn(vec, X, y))
 risks = np.array(risks)
 max_risk = max(risks)
 thresh = inv_eps * max_risk
@@ -253,7 +90,7 @@ for code_indices in pattern_codes:
     vec = np.zeros(n_dim)
     vec[code_indices] = 1
     vec = torch.tensor(vec)
-    pattern_risk = risk_reward_fn(vec)
+    pattern_risk = risk_reward_fn(vec, X, y)
     if pattern_risk >= thresh:
         pattern_vecs_in_sol.append(vec)
         for existing_vec in true_sol:
@@ -283,14 +120,8 @@ max_n_steps = 100
 lr = 1e-2
 
 agent = DENeuralTSDiag(net, nu=exploration_mult, lamdba=reg, style="ts")
-# agent = LenientDENeuralTSDiag(net, nu=exploration_mult, lamdba=reg, reward_sample_thresholds=[float('-inf'), 0])
 
-
-# %% [markdown]
-# ## warmup
-
-# %%
-vecs, rewards = gen_warmup_vecs_and_rewards(100)
+vecs, rewards = gen_warmup_vecs_and_rewards(100, X, y, p, set_existing_vecs)
 
 for i in range(len(rewards)):
     agent.vec_history = vecs[: i + 1]
@@ -353,12 +184,11 @@ logging.info(
 losses = []
 
 for i in range(n_trials):
-    logging.info(f"trial: {i}")
-    best_member = find_best_member(agent.get_sample, de_config)
+    best_member = find_best_member(agent.get_sample, de_config, p, set_existing_vecs)
     best_member_grad = best_member.activation_grad
     a_t = best_member.params.data
-    a_t = change_to_closest_existing_vector(a_t)
-    r_t = torch.tensor([reward_fn(a_t)]).unsqueeze(0)
+    a_t = change_to_closest_existing_vector(a_t, set_existing_vecs)
+    r_t = torch.tensor([reward_fn(a_t, X, y)]).unsqueeze(0)
     a_t = a_t[None, :]
 
     agent.U += best_member_grad * best_member_grad
@@ -370,6 +200,7 @@ for i in range(n_trials):
     loss = agent.train(n_steps, lr)
 
     if (i + 1) % 100 == 0:
+        logging.info(f"trial: {i + 1}")
 
         sol = agent.find_solution_in_vecs(
             set_existing_vecs, thresh
