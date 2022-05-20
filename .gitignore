@@ -1,10 +1,10 @@
 # Custom
 *.pth
-testing/datasets/*
+testing/datasets/combinations/*
+testing/datasets/patterns/*
 testing/images/*
 testing/saves/*
 .vscode
-neuralts
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
