@@ -41,15 +41,7 @@ max_n_steps = args.n_optim_steps
 style = args.style
 lr = args.lr
 n_warmup = args.warmup
-
-#### DE CONFIG ####
-class DEConfig:
-    n_step: int = 16
-    population_size: int = 32
-    differential_weight: float = 1
-    crossover_probability: float = 0.9
-    strategy: Strategy = Strategy.best2bin
-    seed: int = seed
+optim_string = args.optimizer
 
 
 #### SET UP NETWORK AND DE ####
@@ -73,9 +65,8 @@ n_combis_in_sol = len(combis_in_sol)
 
 logging.info(f"There are {n_combis_in_sol} combinations in solution set")
 
-agent = DENeuralTSDiag(net, nu=exploration_mult, lamdba=reg, style=style)
-
-vecs, rewards = gen_warmup_vecs_and_rewards(100, combis, risks, init_probas)
+agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lamdba=reg, style=style)
+vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
 logging.info("Warming up...")
 #### WARMUP ####
@@ -117,12 +108,9 @@ for i in range(n_trials):
     loss = agent.train(n_steps, lr)
 
     #### COMPUTE METRICS ####
-    if (i + 1) % 1 == 0:
+    if (i + 1) % 100 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
             agent, combis, thresh, pat_vecs, true_sol
-        )
-        logging.info(
-            f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
         )
 
         with torch.no_grad():
@@ -136,7 +124,7 @@ for i in range(n_trials):
         losses.append(loss)
 
         logging.info(
-            f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
+            f"trial: {i + 1}, jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
         )
 path = args.output
 append = f"d{n_dim}_trials{n_trials}_nlayers{n_hidden_layers}_max_n_steps_{max_n_steps}_seed{seed}"

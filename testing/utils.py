@@ -65,6 +65,15 @@ class PullPolicy(Policy):
         self.params = nn.Parameter(vec, requires_grad=False)
 
 
+class DEConfig:
+    n_step: int = 16
+    population_size: int = 32
+    differential_weight: float = 1
+    crossover_probability: float = 0.9
+    strategy: Strategy = Strategy.best2bin
+    seed: int = "doesn't matter"
+
+
 def compute_relative_risk(vec, X, y):
     # Determined by polypharmacy definition
     if vec.sum() < 5:
@@ -126,11 +135,6 @@ def gen_warmup_vecs_and_rewards(n_warmup, X, y, p):
     return vecs, rewards
 
 
-def reseed_de(de_config, seed):
-    # Bypass default config of DE and modify seed so populations are different from invocation to invocation
-    de_config.seed = seed
-
-
 def find_best_member(agent_eval_fn, de_config, proba, set_init_vecs, seed):
     """Run DE to find the best vector for the current agent
 
@@ -144,7 +148,8 @@ def find_best_member(agent_eval_fn, de_config, proba, set_init_vecs, seed):
     Returns:
         torch.Tensor: Best member from DE's population
     """
-    reseed_de(de_config, seed)
+    # Reseed DE optim to diversify populations across timesteps
+    de_config.seed = seed
     config = Config(default_config)
 
     @config("policy")
@@ -258,6 +263,14 @@ def parse_args():
         default="ts",
         choices=["ts", "ucb"],
         help="Learning rate for SGD / Adam optimizer",
+    )
+
+    parser.add_argument(
+        "--optimizer",
+        type=str,
+        default="sgd",
+        choices=["sgd", "adam"],
+        help="Select SGD or Adam as optimizer for NN",
     )
 
     parser.add_argument(

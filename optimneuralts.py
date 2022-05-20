@@ -36,7 +36,9 @@ class Network(nn.Module):
 
 
 class DENeuralTSDiag:
-    def __init__(self, net, lamdba=1, nu=1, style="ts", sampletype="r"):
+    def __init__(
+        self, net, optim_string="sgd", lamdba=1, nu=1, style="ts", sampletype="r"
+    ):
         self.net = net
         self.lamdba = lamdba
         self.total_param = sum(
@@ -50,6 +52,11 @@ class DENeuralTSDiag:
         self.loss_func = nn.MSELoss()
         self.vec_history = torch.tensor([]).unsqueeze(0).cuda()
         self.reward_history = torch.tensor([]).unsqueeze(0).cuda()
+
+        optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
+        # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
+        self.optimizer_class = optimizers[optim_string]
+        print(self.optimizer_class)
 
     def compute_activation_and_grad(self, vec):
         self.net.zero_grad()
@@ -82,8 +89,7 @@ class DENeuralTSDiag:
         return sample_r.item(), g_list, mu.item(), cb.item()
 
     def train(self, n_optim_steps, lr=1e-2):
-
-        optimizer = optim.SGD(self.net.parameters(), lr=lr)
+        optimizer = self.optimizer_class(self.net.parameters(), lr=lr)
         for _ in range(n_optim_steps):
             self.net.zero_grad()
             optimizer.zero_grad()
