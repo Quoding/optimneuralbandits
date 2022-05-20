@@ -1,9 +1,9 @@
 # Custom
 *.pth
-testing/datasets/combinations/*
-testing/datasets/patterns/*
+testing/datasets/combinations/*.csv
+testing/datasets/patterns/*.json
 testing/images/*
-testing/saves/*
+testing/saves/*/*.pth
 .vscode
 
 # Byte-compiled / optimized / DLL files
