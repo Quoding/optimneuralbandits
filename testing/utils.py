@@ -201,7 +201,9 @@ def parse_args():
     parser.add_argument(
         "-T", "--trials", type=int, required=True, help="Number of trials for the agent"
     )
-    parser.add_argument("-d", "--dataset", required=True, help="Path to dataset")
+    parser.add_argument(
+        "-d", "--dataset", required=True, help="Name of dataset (located datasets/*"
+    )
     parser.add_argument(
         "-t",
         "--threshold",
