@@ -285,7 +285,7 @@ def parse_args():
         "-o",
         "--output",
         type=str,
-        default="saves/",
+        default="saves/ouput/",
         help="Output directory for metrics and agents",
     )
     args = parser.parse_args()

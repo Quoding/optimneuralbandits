@@ -56,7 +56,6 @@ class DENeuralTSDiag:
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
         self.optimizer_class = optimizers[optim_string]
-        print(self.optimizer_class)
 
     def compute_activation_and_grad(self, vec):
         self.net.zero_grad()

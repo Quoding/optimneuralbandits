@@ -2,6 +2,7 @@
 import json
 import logging
 import sys
+import os
 
 import numpy as np
 import pandas as pd
@@ -126,11 +127,15 @@ for i in range(n_trials):
         logging.info(
             f"trial: {i + 1}, jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
         )
-path = args.output
-append = f"d{n_dim}_trials{n_trials}_nlayers{n_hidden_layers}_max_n_steps_{max_n_steps}_seed{seed}"
-torch.save(agent, f"{path}/agents/{append}.pth")
-torch.save(jaccards, f"{path}/jaccards/{append}.pth")
-torch.save(ratio_apps, f"{path}/ratio_apps/{append}.pth")
-torch.save(percent_found_pats, f"{path}/ratio_found_pats/{append}.pth")
-torch.save(losses, f"{path}/losses/{append}.pth")
-torch.save(dataset_losses, f"{path}/dataset_losses/{append}.pth")
+
+output_dir = args.output
+l = ["agents", "jaccards", "ratio_apps", "ratio_found_pats", "losses", "dataset_losses"]
+for item in l:
+    os.makedirs(f"{output_dir}/{item}/", exist_ok=True)
+
+torch.save(agent, f"{output_dir}/agents/{seed}.pth")
+torch.save(jaccards, f"{output_dir}/jaccards/{seed}.pth")
+torch.save(ratio_apps, f"{output_dir}/ratio_apps/{seed}.pth")
+torch.save(percent_found_pats, f"{output_dir}/ratio_found_pats/{seed}.pth")
+torch.save(losses, f"{output_dir}/losses/{seed}.pth")
+torch.save(dataset_losses, f"{output_dir}/dataset_losses/{seed}.pth")
