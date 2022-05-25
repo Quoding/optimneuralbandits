@@ -307,24 +307,18 @@ def load_dataset(dataset_path):
 
 
 def compute_metrics(agent, combis, thresh, pat_vecs, true_sol):
-    sol = agent.find_solution_in_vecs(
-        combis, thresh
-    )  # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
-    sol_pat = agent.find_solution_in_vecs(
-        pat_vecs, thresh
-    )  # Parmis les patrons insérés, combien j'en trouve tels quels (Ratio_p.t.)
-
-    jaccard, n_inter = compute_jaccard(
-        sol, true_sol
-    )  # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
-    percent_found_pat = len(sol_pat) / len(
-        pat_vecs
-    )  # Combien de patrons tels quels j'ai flag ?
+    # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
+    sol = agent.find_solution_in_vecs(combis, thresh)
+    # Parmis les patrons insérés, combien j'en trouve tels quels
+    sol_pat = agent.find_solution_in_vecs(pat_vecs, thresh)
+    # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
+    jaccard, n_inter = compute_jaccard(sol, true_sol)
+    # Combien de patrons tels quels j'ai flag ?
+    percent_found_pat = len(sol_pat) / len(pat_vecs)
+    # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
     if len(sol) == 0:
         ratio_app = 0
     else:
-        ratio_app = n_inter / len(
-            sol
-        )  # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
+        ratio_app = n_inter / len(sol)
 
     return jaccard, ratio_app, percent_found_pat, n_inter
