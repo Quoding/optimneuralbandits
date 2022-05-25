@@ -21,7 +21,6 @@ combis, risks, patterns, n_obs, n_dim = load_dataset(args.dataset)
 pat_vecs = torch.tensor(
     [patterns[f"pattern_{i}"]["pattern"] for i in range(len(patterns))]
 )
-print(pat_vecs)
 combis, risks = (
     torch.tensor(combis.values).float(),
     torch.tensor(risks.values).unsqueeze(1).float(),
@@ -69,8 +68,6 @@ logging.info(f"There are {n_combis_in_sol} combinations in the solution set")
 
 agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lamdba=reg, style=style)
 
-print(compute_metrics(agent, combis, thresh, pat_vecs, true_sol))
-exit()
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
 logging.info("Warming up...")
