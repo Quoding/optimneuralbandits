@@ -112,6 +112,8 @@ class DENeuralTSDiag:
         """
 
         solution = []
+        mus = []
+        cbs = []
         for vec in vecs:
             mu, g_list = self.compute_activation_and_grad(vec)
             cb = torch.sum(g_list * g_list / self.U)
@@ -119,12 +121,14 @@ class DENeuralTSDiag:
             if (mu - cb).item() > thresh:
                 solution.append(vec)
 
+            mus.append(mu.item())
+            cbs.append(cb.item())
         if solution:
             solution = torch.stack(solution)
         else:
             solution = torch.tensor([])
 
-        return solution
+        return (solution, mus, cbs)
 
 
 class LenientDENeuralTSDiag(DENeuralTSDiag):

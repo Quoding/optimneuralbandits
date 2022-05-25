@@ -308,9 +308,9 @@ def load_dataset(dataset_path):
 
 def compute_metrics(agent, combis, thresh, pat_vecs, true_sol):
     # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
-    sol = agent.find_solution_in_vecs(combis, thresh)
+    sol, _, _ = agent.find_solution_in_vecs(combis, thresh)
     # Parmis les patrons insérés, combien j'en trouve tels quels
-    sol_pat = agent.find_solution_in_vecs(pat_vecs, thresh)
+    sol_pat, _, _ = agent.find_solution_in_vecs(pat_vecs, thresh)
     # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
     jaccard, n_inter = compute_jaccard(sol, true_sol)
     # Combien de patrons tels quels j'ai flag ?
