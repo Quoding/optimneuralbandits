@@ -90,14 +90,14 @@ class DENeuralTSDiag:
     def train(self, n_optim_steps, lr=1e-2):
         optimizer = self.optimizer_class(self.net.parameters(), lr=lr)
         for _ in range(n_optim_steps):
-            self.net.zero_grad()
             optimizer.zero_grad()
             pred = self.net(self.vec_history)
             loss = self.loss_func(pred, self.reward_history)
             loss.backward()
             optimizer.step()
 
-        self.net.zero_grad()
+        optimizer.zero_grad()
+
         return loss.detach().item()
 
     def find_solution_in_vecs(self, vecs, thresh):

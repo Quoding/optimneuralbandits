@@ -202,7 +202,7 @@ def parse_args():
         "-T", "--trials", type=int, required=True, help="Number of trials for the agent"
     )
     parser.add_argument(
-        "-d", "--dataset", required=True, help="Name of dataset (located datasets/*"
+        "-d", "--dataset", required=True, help="Name of dataset (located in datasets/*)"
     )
     parser.add_argument(
         "-t",
@@ -216,7 +216,7 @@ def parse_args():
         "--seed",
         type=int,
         default=42,
-        help="Set random seed base for training (will be added to current trial number to diversify DE)",
+        help="Set random seed base for training, only affects network initialization",
     )
     parser.add_argument(
         "-w",
@@ -264,7 +264,7 @@ def parse_args():
         type=str,
         default="ts",
         choices=["ts", "ucb"],
-        help="Learning rate for SGD / Adam optimizer",
+        help="Choose between NeuralTS and NeuralUCB to train",
     )
 
     parser.add_argument(
@@ -298,7 +298,10 @@ def load_dataset(dataset_path):
     with open("datasets/patterns/" + dataset_path + ".json", "r") as f:
         patterns = json.load(f)
 
+    # Remove last 3 columns that are risk, inter, dist
     features = dataset.iloc[:, :-3]
+
+    # Retrieve risks
     risks = dataset.iloc[:, -3]
 
     n_obs, n_dim = features.shape
@@ -309,7 +312,7 @@ def load_dataset(dataset_path):
 def compute_metrics(agent, combis, thresh, pat_vecs, true_sol):
     # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
     sol, _, _ = agent.find_solution_in_vecs(combis, thresh)
-    # Parmis les patrons insérés, combien j'en trouve tels quels
+    # Parmis les patrons dangereux (ground truth), combien j'en trouve tels quels
     sol_pat, _, _ = agent.find_solution_in_vecs(pat_vecs, thresh)
     # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
     jaccard, n_inter = compute_jaccard(sol, true_sol)
