@@ -26,8 +26,10 @@ combis, risks = (
     torch.tensor(risks.values).unsqueeze(1).float(),
 )
 
+
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
+print(torch.tensor([]).is_cuda)
 #### PARAMETERS ####
 seed = args.seed
 make_deterministic(seed)

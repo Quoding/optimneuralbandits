@@ -120,13 +120,13 @@ def change_to_closest_existing_vector(vec, set_existing_vecs):
     return set_existing_vecs[knn_idx], knn_idx
 
 
-def gen_warmup_vecs_and_rewards(n_warmup, X, y, p):
+def gen_warmup_vecs_and_rewards(n_warmup, combis, risks, p):
     vecs = []
     rewards = []
     for i in range(n_warmup):
         idx = p.multinomial(num_samples=1).item()
-        vec = X[idx]
-        reward = compute_relative_risk(vec, X, y)
+        vec = combis[idx]
+        reward = risks[idx]
         vecs.append(vec.tolist())
         rewards.append([reward])
 
