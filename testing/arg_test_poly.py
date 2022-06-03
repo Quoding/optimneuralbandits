@@ -17,19 +17,11 @@ from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
 #### SET UP ####
 args = parse_args()
 
-combis, risks, patterns, n_obs, n_dim = load_dataset(args.dataset)
-pat_vecs = torch.tensor(
-    [patterns[f"pattern_{i}"]["pattern"] for i in range(len(patterns))]
-)
-combis, risks = (
-    torch.tensor(combis.values).float(),
-    torch.tensor(risks.values).unsqueeze(1).float(),
-)
+combis, risks, pat_vecs, n_obs, n_dim = load_dataset(args.dataset)
 
 
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
-print(torch.tensor([]).is_cuda)
 #### PARAMETERS ####
 seed = args.seed
 make_deterministic(seed)

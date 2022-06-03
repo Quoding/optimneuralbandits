@@ -299,14 +299,22 @@ def load_dataset(dataset_path):
         patterns = json.load(f)
 
     # Remove last 3 columns that are risk, inter, dist
-    features = dataset.iloc[:, :-3]
+    combis = dataset.iloc[:, :-3]
 
     # Retrieve risks
     risks = dataset.iloc[:, -3]
 
-    n_obs, n_dim = features.shape
+    n_obs, n_dim = combis.shape
 
-    return features, risks, patterns, n_obs, n_dim
+    pat_vecs = torch.tensor(
+        [patterns[f"pattern_{i}"]["pattern"] for i in range(len(patterns))]
+    )
+    combis, risks = (
+        torch.tensor(combis.values).float(),
+        torch.tensor(risks.values).unsqueeze(1).float(),
+    )
+
+    return combis, risks, pat_vecs, n_obs, n_dim
 
 
 def compute_metrics(agent, combis, thresh, pat_vecs, true_sol):
