@@ -281,14 +281,14 @@ def parse_args():
     )
     parser.add_argument(
         "--de_pop",
-        type=str,
-        default="32",
+        type=int,
+        default=32,
         help="Number of members for DE's population",
     )
     parser.add_argument(
         "--de_n_steps",
-        type=str,
-        default="16",
+        type=int,
+        default=16,
         help="Number of step for DE Optim",
     )
     args = parser.parse_args()
