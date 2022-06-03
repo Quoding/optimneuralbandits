@@ -39,6 +39,15 @@ n_warmup = args.warmup
 optim_string = args.optimizer
 
 
+class DEConfig:
+    n_step: int = args.de_n_steps
+    population_size: int = args.de_pop
+    differential_weight: float = 1
+    crossover_probability: float = 0.9
+    strategy: Strategy = Strategy.best2bin
+    seed: int = "doesn't matter"
+
+
 #### SET UP NETWORK AND DE ####
 de_config = DEConfig
 de_policy = PullPolicy

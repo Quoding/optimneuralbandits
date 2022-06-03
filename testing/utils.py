@@ -65,15 +65,6 @@ class PullPolicy(Policy):
         self.params = nn.Parameter(vec, requires_grad=False)
 
 
-class DEConfig:
-    n_step: int = 16
-    population_size: int = 32
-    differential_weight: float = 1
-    crossover_probability: float = 0.9
-    strategy: Strategy = Strategy.best2bin
-    seed: int = "doesn't matter"
-
-
 def compute_relative_risk(vec, X, y):
     # Determined by polypharmacy definition
     if vec.sum() < 5:
@@ -288,16 +279,34 @@ def parse_args():
         default="saves/ouput/",
         help="Output directory for metrics and agents",
     )
+    parser.add_argument(
+        "--de_pop",
+        type=str,
+        default="32",
+        help="Number of members for DE's population",
+    )
+    parser.add_argument(
+        "--de_n_steps",
+        type=str,
+        default="16",
+        help="Number of step for DE Optim",
+    )
     args = parser.parse_args()
     return args
 
 
-def load_dataset(dataset_path):
-    dataset = pd.read_csv("datasets/combinations/" + dataset_path + ".csv")
+def load_dataset(dataset_name, path_to_dataset=None):
+    if path_to_dataset is None:
+        dataset = pd.read_csv(f"datasets/combinations/{dataset_name}.csv")
 
-    with open("datasets/patterns/" + dataset_path + ".json", "r") as f:
-        patterns = json.load(f)
+        with open(f"datasets/patterns/{dataset_name}.json", "r") as f:
+            patterns = json.load(f)
 
+    else:
+        dataset = pd.read_csv(f"{path_to_dataset}/combinations/{dataset_name}.csv")
+
+        with open(f"{path_to_dataset}/patterns/{dataset_name}.json", "r") as f:
+            patterns = json.load(f)
     # Remove last 3 columns that are risk, inter, dist
     combis = dataset.iloc[:, :-3]
 
