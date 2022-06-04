@@ -20,7 +20,7 @@ def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr=1e-2):
     input_vec.requires_grad = True
     optimizer = torch.optim.SGD([input_vec], lr=lr)
 
-    population = torch.tensor(input_vec.detach().clone())
+    population = input_vec.detach().clone()
     population_values = []
 
     # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
