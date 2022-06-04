@@ -295,7 +295,7 @@ def parse_args():
     parser.add_argument(
         "--pop_lr",
         type=float,
-        default=1e-2,
+        default=1e-1,
         help="Learning rate for the population optimizer (if gradient based)",
     )
     args = parser.parse_args()
