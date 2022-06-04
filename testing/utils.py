@@ -56,6 +56,7 @@ class PullPolicy(Policy):
         to find its value according to `eval_fn`"""
         self.transform()
         sample_r, activation_grad, _, _ = self.eval_fn(self.params.data)
+        sample_r = sample_r.item()
         self.activation_grad = activation_grad
         self.sample_r = sample_r
         return sample_r
@@ -241,7 +242,7 @@ def parse_args():
         "--n_optim_steps",
         type=int,
         default=100,
-        help="Regularization factor for training",
+        help="Number of gradient steps in NeuralTS/NeuralUCB",
     )
     parser.add_argument(
         "--lr",
@@ -280,16 +281,22 @@ def parse_args():
         help="Output directory for metrics and agents",
     )
     parser.add_argument(
-        "--de_pop",
+        "--pop_n_members",
         type=int,
         default=32,
-        help="Number of members for DE's population",
+        help="Number of members for the population optimizer",
     )
     parser.add_argument(
-        "--de_n_steps",
+        "--pop_n_steps",
         type=int,
         default=16,
-        help="Number of step for DE Optim",
+        help="Number of step for the population optimizer",
+    )
+    parser.add_argument(
+        "--pop_lr",
+        type=float,
+        default=1e-2,
+        help="Learning rate for the population optimizer (if gradient based)",
     )
     args = parser.parse_args()
     return args

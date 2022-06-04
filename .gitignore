@@ -3,7 +3,7 @@
 testing/datasets/combinations/*.csv
 testing/datasets/patterns/*.json
 testing/images/*
-testing/saves/*/*.pth
+testing/saves/*
 .vscode
 testing/debug/
 

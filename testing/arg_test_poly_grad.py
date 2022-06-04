@@ -14,11 +14,57 @@ sys.path.append("..")
 from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
 
 
+def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr=1e-2):
+    # Generate a random vector to optimize
+    input_vec = torch.randint(0, 2, size=(1, existing_vecs.shape[1])).float()
+    input_vec.requires_grad = True
+    optimizer = torch.optim.SGD([input_vec], lr=lr)
+
+    population = torch.tensor(input_vec.detach().clone())
+    population_values = []
+
+    # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
+    for i in range(n_steps):
+        optimizer.zero_grad()
+
+        # Evaluate
+        sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
+
+        # Record input_vecs and values in the population
+        population_values.append(sample_r.item())
+
+        # Backprop
+        sample_r = -sample_r
+        sample_r.backward()
+        optimizer.step()
+
+        population = torch.cat((population, input_vec.detach().clone()))
+
+    # Record final optimized input_vecs in population since they're the last optimizer steps product
+    sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
+
+    population_values.append(sample_r.item())
+
+    # Clean up grad before exiting
+    optimizer.zero_grad()
+
+    population_values = torch.tensor(population_values)
+
+    # Find the best generated vector
+    max_idx = torch.argmax(population_values)
+    best_vec = population[max_idx]
+
+    # Coerce to an existing vector via L1 norm
+    a_t, idx = change_to_closest_existing_vector(best_vec, existing_vecs)
+    sample_r, g_list, mu, cb = agent_eval_fn(a_t)
+
+    return a_t, idx, g_list
+
+
 #### SET UP ####
 args = parse_args()
 
 combis, risks, pat_vecs, n_obs, n_dim = load_dataset(args.dataset)
-
 
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
@@ -37,10 +83,12 @@ style = args.style
 lr = args.lr
 n_warmup = args.warmup
 optim_string = args.optimizer
+pop_optim_lr = args.pop_lr
+pop_optim_n_steps = args.pop_n_steps
 
 
 class DEConfig:
-    n_step: int = args.pop_n_steps
+    n_step: int = pop_optim_n_steps
     population_size: int = args.pop_n_members
     differential_weight: float = 1
     crossover_probability: float = 0.9
@@ -98,10 +146,13 @@ logging.info("Warm up over. Starting training")
 
 #### TRAINING ####
 for i in range(n_trials):
-    best_member = find_best_member(agent.get_sample, de_config, init_probas, combis, i)
-    best_member_grad = best_member.activation_grad
-    a_t = best_member.params.data
-    a_t, idx = change_to_closest_existing_vector(a_t, combis)
+    # best_member = find_best_member(agent.get_sample, de_config, init_probas, combis, i)
+    # best_member_grad = best_member.activation_grad
+    # a_t = best_member.params.data
+    # a_t, idx = change_to_closest_existing_vector(a_t, combis)
+    a_t, idx, best_member_grad = do_gradient_optim(
+        agent.get_sample, pop_optim_n_steps, combis, lr=pop_optim_lr
+    )
     r_t = reward_fn(idx)[:, None]
     a_t = a_t[None, :]
     agent.U += best_member_grad * best_member_grad
