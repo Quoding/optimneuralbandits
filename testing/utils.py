@@ -56,7 +56,7 @@ class PullPolicy(Policy):
         to find its value according to `eval_fn`"""
         self.transform()
         sample_r, activation_grad, _, _ = self.eval_fn(self.params.data)
-        sample_r = sample_r.item()
+        sample_r = sample_r.detach().item()
         self.activation_grad = activation_grad
         self.sample_r = sample_r
         return sample_r
