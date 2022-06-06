@@ -68,7 +68,6 @@ class DENeuralTSDiag:
         return mu, g_list
 
     def get_sample(self, vec):
-        # torch.set_grad_enabled(True)
         mu, g_list = self.compute_activation_and_grad(vec)
         cb = torch.sum(g_list * g_list / self.U)
         cb = torch.sqrt(self.lamdba * cb)
@@ -85,7 +84,6 @@ class DENeuralTSDiag:
         elif self.style == "ucb":
             sample_r = mu.view(-1) + sigma.view(-1)
 
-        # torch.set_grad_enabled(False)
         return sample_r, g_list, mu.detach().item(), cb.item()
 
     def train(self, n_optim_steps, lr=1e-2):
