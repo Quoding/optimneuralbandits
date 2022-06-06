@@ -1,4 +1,3 @@
-# %%
 import json
 import logging
 import sys
@@ -14,7 +13,7 @@ sys.path.append("..")
 from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
 
 
-def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr=1e-2):
+def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
     # Generate a random vector to optimize
     input_vec = torch.randint(0, 2, size=(1, existing_vecs.shape[1])).float()
     input_vec.requires_grad = True
