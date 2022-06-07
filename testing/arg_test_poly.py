@@ -10,7 +10,7 @@ import torch
 from utils import *
 
 sys.path.append("..")
-from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
+from optimneuralts import Network, DENeuralTSDiag, LenientDENeuralTSDiag
 
 
 #### SET UP ####
@@ -30,7 +30,9 @@ width = args.width
 n_hidden_layers = args.layers
 reg = args.reg
 exploration_mult = args.exploration
-reward_fn = lambda idx: risks[idx]
+reward_fn = lambda idx: risks[idx] + torch.normal(
+    torch.tensor([0.0]), torch.tensor([0.1])
+)
 max_n_steps = args.n_optim_steps
 style = args.style
 lr = args.lr
@@ -68,7 +70,7 @@ n_combis_in_sol = len(combis_in_sol)
 
 logging.info(f"There are {n_combis_in_sol} combinations in the solution set")
 
-agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lamdba=reg, style=style)
+agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lambda_=reg, style=style)
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
