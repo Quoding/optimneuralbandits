@@ -16,7 +16,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 
-class Network(nn.Module):
+class NetworkDropout(nn.Module):
     def __init__(self, dim, hidden_size=100, mask=None):
         super().__init__()
         self.fc1 = nn.Linear(dim, hidden_size)
@@ -35,24 +35,49 @@ class Network(nn.Module):
             return self.fc2(self.activate(self.mask * self.fc1(x)))
 
 
+class Network(nn.Module):
+    def __init__(self, dim, n_hidden_layers, hidden_size=100):
+        super().__init__()
+        self.activation = nn.ReLU()
+        self.layers = nn.ModuleList()
+
+        self.layers.append(nn.Linear(dim, hidden_size))
+        for _ in range(n_hidden_layers - 1):
+            self.layers.append(nn.Linear(hidden_size, hidden_size))
+        self.layers.append(nn.Linear(hidden_size, 1))
+
+    def forward(self, x):
+        for layer in self.layers[:-1]:
+            x = self.activation(layer(x))
+        return self.layers[-1](x)
+
+
 class DENeuralTSDiag:
     def __init__(
-        self, net, optim_string="sgd", lamdba=1, nu=1, style="ts", sampletype="r"
+        self,
+        net,
+        optim_string="sgd",
+        lambda_=1,
+        nu=1,
+        style="ts",
+        sampletype="r",
+        decay=False,
     ):
         self.net = net
-        self.lamdba = lamdba
+        self.lambda_ = lambda_
         self.total_param = sum(
             p.numel() for p in self.net.parameters() if p.requires_grad
         )
         self.len = 0
-        self.U = lamdba * torch.ones((self.total_param,)).cuda()
+        self.U = lambda_ * torch.ones((self.total_param,)).cuda()
         self.nu = nu
         self.style = style
         self.sampletype = sampletype
+        self.decay = decay
+
         self.loss_func = nn.MSELoss()
         self.vec_history = torch.tensor([]).unsqueeze(0).cuda()
         self.reward_history = torch.tensor([]).unsqueeze(0).cuda()
-
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
         self.optimizer_class = optimizers[optim_string]
@@ -70,7 +95,7 @@ class DENeuralTSDiag:
     def get_sample(self, vec):
         mu, g_list = self.compute_activation_and_grad(vec)
         cb = torch.sum(g_list * g_list / self.U)
-        cb = torch.sqrt(self.lamdba * cb)
+        cb = torch.sqrt(self.lambda_ * cb)
 
         if self.sampletype == "r":
             sigma = self.nu * cb
@@ -87,7 +112,12 @@ class DENeuralTSDiag:
         return sample_r, g_list, mu.detach().item(), cb.item()
 
     def train(self, n_optim_steps, lr=1e-2):
-        optimizer = self.optimizer_class(self.net.parameters(), lr=lr)
+        self.len += 1
+        weight_decay = self.decay * (self.lambda_ / self.len)
+        optimizer = self.optimizer_class(
+            self.net.parameters(), lr=lr, weight_decay=weight_decay
+        )
+
         for _ in range(n_optim_steps):
             optimizer.zero_grad()
             pred = self.net(self.vec_history)
@@ -100,6 +130,37 @@ class DENeuralTSDiag:
         return loss.detach().item()
 
     def find_solution_in_vecs(self, vecs, thresh):
+        """Find and return solutions according to the threshold in the given set of vectors
+        A vector is part of the solution if its activation `mu` and 3 times its std is entirely contained above the threshold.
+        i.e. mu - 3 * sigma > thresh -> vector is in solution
+        Args:
+            vecs (torch.Tensor/list of torch.Tensor): List of vectors to check for solution membership
+            thresh (float): Threshold against which to compare for the solution
+        Returns:
+            tensor: torch.Tensor of torch.Tensor of the solution
+        """
+
+        solution = []
+        mus = []
+        sigmas = []
+        for vec in vecs:
+            mu, g_list = self.compute_activation_and_grad(vec)
+            sigma = torch.sum(g_list * g_list / self.U)
+            sigma = torch.sqrt(self.lambda_ * sigma)
+
+            if (mu - 3 * sigma).item() > thresh:
+                solution.append(vec)
+
+            mus.append(mu.item())
+            sigmas.append(3 * sigma.item())
+        if solution:
+            solution = torch.stack(solution)
+        else:
+            solution = torch.tensor([])
+
+        return (solution, mus, sigmas)
+
+    def find_solution_in_vecs_ucb(self, vecs, thresh):
         """Find and return solutions according to the threshold in the given set of vectors
         A vector is part of the solution if its activation `mu` and its confidence interval `cb` is entirely contained above the threshold.
         i.e. mu - cb > thresh -> vector is in solution
@@ -116,7 +177,7 @@ class DENeuralTSDiag:
         for vec in vecs:
             mu, g_list = self.compute_activation_and_grad(vec)
             cb = torch.sum(g_list * g_list / self.U)
-            cb = torch.sqrt(self.lamdba * cb)
+            cb = torch.sqrt(self.lambda_ * cb)
             if (mu - cb).item() > thresh:
                 solution.append(vec)
 
@@ -139,7 +200,7 @@ class LenientDENeuralTSDiag(DENeuralTSDiag):
         mu, g_list = self.compute_activation_and_grad(vec)
 
         cb = torch.sum(g_list * g_list / self.U)
-        cb = torch.sqrt(self.lamdba * cb)
+        cb = torch.sqrt(self.lambda_ * cb)
 
         sigma = self.nu * cb
 
