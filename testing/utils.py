@@ -18,23 +18,6 @@ logging.basicConfig(level=logging.INFO)
 torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
 
-class Network(nn.Module):
-    def __init__(self, dim, n_hidden_layers, hidden_size=100):
-        super().__init__()
-        self.activation = nn.ReLU()
-        self.layers = nn.ModuleList()
-
-        self.layers.append(nn.Linear(dim, hidden_size))
-        for _ in range(n_hidden_layers - 1):
-            self.layers.append(nn.Linear(hidden_size, hidden_size))
-        self.layers.append(nn.Linear(hidden_size, 1))
-
-    def forward(self, x):
-        for layer in self.layers[:-1]:
-            x = self.activation(layer(x))
-        return self.layers[-1](x)
-
-
 class PullPolicy(Policy):
     """
     Pull policy for DE. Utility class to do DE
@@ -83,6 +66,7 @@ def compute_relative_risk(vec, X, y):
     n_exposed_case = len(rows_exposed_case)
     n_control = len(rows_control)
     n_control_case = len(rows_control_case)
+
     rr = relative_risk(
         n_exposed_case, n_exposed, n_control_case, n_control
     ).relative_risk
