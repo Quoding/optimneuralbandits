@@ -16,36 +16,42 @@ from optimneuralts import Network, DENeuralTSDiag, LenientDENeuralTSDiag
 #### SET UP ####
 args = parse_args()
 
-combis, risks, pat_vecs, n_obs, n_dim = load_dataset(args.dataset)
-
-
-init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
 #### PARAMETERS ####
-seed = args.seed
-make_deterministic(seed)
-thresh = args.threshold
 n_trials = args.trials
+dataset = args.dataset
+thresh = args.threshold
+seed = args.seed
 width = args.width
 n_hidden_layers = args.layers
 reg = args.reg
 exploration_mult = args.exploration
+n_epochs = args.n_epochs
+lr = args.lr
+style = args.style
+optim_string = args.optimizer
+n_warmup = args.warmup
+pop_optim_n_members = args.pop_n_members
+pop_optim_n_steps = args.pop_n_steps
+pop_optim_lr = args.pop_lr
+batch_size = args.batch_size
+n_sigmas = args.n_sigmas
+ci_thresh = args.ci_thresh
+
+make_deterministic(seed)
+
+combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
+
+init_probas = torch.tensor([1 / len(combis)] * len(combis))
+
 reward_fn = lambda idx: risks[idx] + torch.normal(
     torch.tensor([0.0]), torch.tensor([0.1])
 )
-n_epochs = args.n_epochs
-style = args.style
-lr = args.lr
-n_warmup = args.warmup
-optim_string = args.optimizer
-ci_thresh = args.ci_thresh
-batch_size = args.batch_size
-n_sigmas = args.n_sigmas
 
 
 class DEConfig:
-    n_step: int = args.pop_n_steps
-    population_size: int = args.pop_n_members
+    n_step: int = pop_optim_n_steps
+    population_size: int = pop_optim_n_members
     differential_weight: float = 1
     crossover_probability: float = 0.9
     strategy: Strategy = Strategy.best1bin
@@ -81,17 +87,16 @@ logging.info("Warming up...")
 #### WARMUP ####
 agent.train(n_epochs, lr=lr, batch_size=batch_size)
 
-
 #### GET METRICS POST WARMUP, PRE TRAINING ####
-# jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-#     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
-# )
-# logging.info(
-#     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
-# )
-# jaccards.append(jaccard)
-# ratio_apps.append(ratio_app)
-# percent_found_pats.append(percent_found_pat)
+jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
+    agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+)
+logging.info(
+    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+)
+jaccards.append(jaccard)
+ratio_apps.append(ratio_app)
+percent_found_pats.append(percent_found_pat)
 logging.info("Warm up over. Starting training")
 
 #### TRAINING ####

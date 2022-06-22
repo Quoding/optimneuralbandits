@@ -231,11 +231,7 @@ def parse_args():
         required=True,
         help="Good and bad action threshold",
     )
-    parser.add_argument(
-        "--ci_thresh",
-        action="store_true",
-        help="Tells the agent to play the best arm which has an interesecting lower CI with the threshold",
-    )
+
     parser.add_argument(
         "-s",
         "--seed",
@@ -342,8 +338,60 @@ def parse_args():
         default=3,
         help="Number of sigmas to consider (sigma-rule) for confidence around a network's given activation",
     )
+    parser.add_argument(
+        "--ci_thresh",
+        action="store_true",
+        help="Tells the agent to play the best arm which has an interesecting lower CI with the threshold",
+    )
     args = parser.parse_args()
     return args
+
+
+def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
+    # Generate a random vector to optimize
+    input_vec = torch.randint(0, 2, size=(1, existing_vecs.shape[1])).float()
+    input_vec.requires_grad = True
+    optimizer = torch.optim.SGD([input_vec], lr=lr)
+
+    population = input_vec.detach().clone()
+    population_values = []
+
+    # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
+    for i in range(n_steps):
+        optimizer.zero_grad()
+
+        # Evaluate
+        sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
+
+        # Record input_vecs and values in the population
+        population_values.append(sample_r.item())
+
+        # Backprop
+        sample_r = -sample_r
+        sample_r.backward()
+        optimizer.step()
+
+        population = torch.cat((population, input_vec.detach().clone()))
+
+    # Record final optimized input_vecs in population since they're the last optimizer steps product
+    sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
+
+    population_values.append(sample_r.item())
+
+    # Clean up grad before exiting
+    optimizer.zero_grad()
+
+    population_values = torch.tensor(population_values)
+
+    # Find the best generated vector
+    max_idx = torch.argmax(population_values)
+    best_vec = population[max_idx]
+
+    # Coerce to an existing vector via L1 norm
+    a_t, idx = change_to_closest_existing_vector(best_vec, existing_vecs)
+    sample_r, g_list, mu, cb = agent_eval_fn(a_t)
+
+    return a_t, idx, g_list
 
 
 def load_dataset(dataset_name, path_to_dataset=None):
