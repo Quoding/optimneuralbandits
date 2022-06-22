@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 from detorch import DE, Policy, Strategy
 from detorch.config import Config, default_config
 from torch import optim
@@ -33,6 +34,26 @@ class NetworkDropout(nn.Module):
             return self.fc2(self.activate(self.fc1(x)))
         else:
             return self.fc2(self.activate(self.mask * self.fc1(x)))
+
+
+class ReplayDataset(Dataset):
+    def __init__(self, features=None, rewards=None):
+        self.hist_features = features
+        self.hist_rewards = rewards
+
+    def __len__(self):
+        return len(self.hist_rewards)
+
+    def __getitem__(self, idx):
+        return self.hist_features[idx], self.hist_rewards[idx]
+
+    def set_hists(self, hist_features, hist_rewards):
+        self.hist_features = hist_features
+        self.hist_rewards = hist_rewards
+
+    def add(self, features, reward):
+        self.hist_features = torch.cat((self.hist_features, features))
+        self.hist_rewards = torch.cat((self.hist_rewards, reward))
 
 
 class Network(nn.Module):
@@ -76,8 +97,9 @@ class DENeuralTSDiag:
         self.decay = decay
 
         self.loss_func = nn.MSELoss()
-        self.vec_history = torch.tensor([]).unsqueeze(0).cuda()
-        self.reward_history = torch.tensor([]).unsqueeze(0).cuda()
+        # self.vec_history = torch.tensor([]).unsqueeze(0).cuda()
+        # self.reward_history = torch.tensor([]).unsqueeze(0).cuda()
+        self.dataset = ReplayDataset()
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
         self.optimizer_class = optimizers[optim_string]
@@ -111,25 +133,39 @@ class DENeuralTSDiag:
 
         return sample_r, g_list, mu.detach().item(), cb.item()
 
-    def train(self, n_optim_steps, lr=1e-2):
+    def train(self, n_epochs, lr=1e-2, batch_size=32):
+        # For full batch grad descent
+        if batch_size == "full":
+            batch_size = len(self.dataset)
+
+        # Setup
         self.len += 1
         weight_decay = self.decay * (self.lambda_ / self.len)
         optimizer = self.optimizer_class(
             self.net.parameters(), lr=lr, weight_decay=weight_decay
         )
 
-        for _ in range(n_optim_steps):
-            optimizer.zero_grad()
-            pred = self.net(self.vec_history)
-            loss = self.loss_func(pred, self.reward_history)
-            loss.backward()
-            optimizer.step()
+        loader = DataLoader(
+            self.dataset,
+            batch_size=batch_size,
+            shuffle=True,
+            generator=torch.Generator(device="cuda"),
+        )
+
+        # Train loop
+        for _ in range(n_epochs):
+            for X, y in loader:
+                optimizer.zero_grad()
+                pred = self.net(X)
+                loss = self.loss_func(pred, y)
+                loss.backward()
+                optimizer.step()
 
         optimizer.zero_grad()
 
         return loss.detach().item()
 
-    def find_solution_in_vecs(self, vecs, thresh):
+    def find_solution_in_vecs(self, vecs, thresh, n_sigmas):
         """Find and return solutions according to the threshold in the given set of vectors
         A vector is part of the solution if its activation `mu` and 3 times its std is entirely contained above the threshold.
         i.e. mu - 3 * sigma > thresh -> vector is in solution
@@ -148,7 +184,7 @@ class DENeuralTSDiag:
             sigma = torch.sum(g_list * g_list / self.U)
             sigma = torch.sqrt(self.lambda_ * sigma)
 
-            if (mu - 3 * sigma).item() > thresh:
+            if (mu - n_sigmas * sigma).item() > thresh:
                 solution.append(vec)
 
             mus.append(mu.item())
@@ -159,36 +195,6 @@ class DENeuralTSDiag:
             solution = torch.tensor([])
 
         return (solution, mus, sigmas)
-
-    def find_solution_in_vecs_ucb(self, vecs, thresh):
-        """Find and return solutions according to the threshold in the given set of vectors
-        A vector is part of the solution if its activation `mu` and its confidence interval `cb` is entirely contained above the threshold.
-        i.e. mu - cb > thresh -> vector is in solution
-        Args:
-            vecs (torch.Tensor/list of torch.Tensor): List of vectors to check for solution membership
-            thresh (float): Threshold against which to compare for the solution
-        Returns:
-            tensor: torch.Tensor of torch.Tensor of the solution
-        """
-
-        solution = []
-        mus = []
-        cbs = []
-        for vec in vecs:
-            mu, g_list = self.compute_activation_and_grad(vec)
-            cb = torch.sum(g_list * g_list / self.U)
-            cb = torch.sqrt(self.lambda_ * cb)
-            if (mu - cb).item() > thresh:
-                solution.append(vec)
-
-            mus.append(mu.item())
-            cbs.append(cb.item())
-        if solution:
-            solution = torch.stack(solution)
-        else:
-            solution = torch.tensor([])
-
-        return (solution, mus, cbs)
 
 
 class LenientDENeuralTSDiag(DENeuralTSDiag):
