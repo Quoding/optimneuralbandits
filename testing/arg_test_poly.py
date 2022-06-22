@@ -33,11 +33,14 @@ exploration_mult = args.exploration
 reward_fn = lambda idx: risks[idx] + torch.normal(
     torch.tensor([0.0]), torch.tensor([0.1])
 )
-max_n_steps = args.n_optim_steps
+n_epochs = args.n_epochs
 style = args.style
 lr = args.lr
 n_warmup = args.warmup
 optim_string = args.optimizer
+ci_thresh = args.ci_thresh
+batch_size = args.batch_size
+n_sigmas = args.n_sigmas
 
 
 class DEConfig:
@@ -45,7 +48,7 @@ class DEConfig:
     population_size: int = args.pop_n_members
     differential_weight: float = 1
     crossover_probability: float = 0.9
-    strategy: Strategy = Strategy.best2bin
+    strategy: Strategy = Strategy.best1bin
     seed: int = "doesn't matter"
 
 
@@ -55,8 +58,6 @@ de_policy = PullPolicy
 net = Network(n_dim, n_hidden_layers, width).to(device)
 
 #### METRICS ####
-hist_solution = []
-hist_solution_pat = []
 jaccards = []
 ratio_apps = []
 percent_found_pats = []
@@ -74,32 +75,30 @@ agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lambda_=reg, styl
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
+agent.dataset.set_hists(vecs, rewards)
+
 logging.info("Warming up...")
 #### WARMUP ####
-for i in range(len(rewards)):
-    agent.vec_history = vecs[: i + 1]
-    agent.reward_history = rewards[: i + 1]
-    vec = vecs[i]
-    activ, grad = agent.compute_activation_and_grad(vec)
-    agent.U += grad * grad
-    agent.train(min(i + 1, max_n_steps), lr)
+agent.train(n_epochs, lr=lr, batch_size=batch_size)
 
 
 #### GET METRICS POST WARMUP, PRE TRAINING ####
-jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-    agent, combis, thresh, pat_vecs, true_sol
-)
-logging.info(
-    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
-)
-jaccards.append(jaccard)
-ratio_apps.append(ratio_app)
-percent_found_pats.append(percent_found_pat)
+# jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
+#     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+# )
+# logging.info(
+#     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+# )
+# jaccards.append(jaccard)
+# ratio_apps.append(ratio_app)
+# percent_found_pats.append(percent_found_pat)
 logging.info("Warm up over. Starting training")
 
 #### TRAINING ####
 for i in range(n_trials):
-    best_member = find_best_member(agent.get_sample, de_config, init_probas, combis, i)
+    best_member = find_best_member(
+        agent.get_sample, de_config, init_probas, combis, i, ci_thresh, thresh, n_sigmas
+    )
     best_member_grad = best_member.activation_grad
     a_t = best_member.params.data
     a_t, idx = change_to_closest_existing_vector(a_t, combis)
@@ -107,16 +106,14 @@ for i in range(n_trials):
     a_t = a_t[None, :]
     agent.U += best_member_grad * best_member_grad
 
-    agent.vec_history = torch.cat((agent.vec_history, a_t))
-    agent.reward_history = torch.cat((agent.reward_history, r_t))
+    agent.dataset.add(a_t, r_t)
 
-    n_steps = min(agent.reward_history.shape[0], max_n_steps)
-    loss = agent.train(n_steps, lr)
+    loss = agent.train(n_epochs, lr)
 
     #### COMPUTE METRICS ####
     if (i + 1) % 100 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-            agent, combis, thresh, pat_vecs, true_sol
+            agent, combis, thresh, pat_vecs, true_sol, n_sigmas
         )
 
         with torch.no_grad():

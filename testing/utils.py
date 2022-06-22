@@ -26,23 +26,37 @@ class PullPolicy(Policy):
 
     bounds = [0, 1]
 
-    def __init__(self, eval_fn, p, set_existing_vecs):
+    def __init__(self, eval_fn, p, set_existing_vecs, thresh, n_sigmas):
+        """
+        Args:
+            eval_fn (function): _description_
+            p (torch.Tensor): probability vector for initialization. Must be equal in length to `set_existing_vecs`
+            set_existing_vecs (torch.Tensor): Set of existing vectors to initialize from
+            thresh (float): Threshold for ci intersection.
+        """
         super().__init__()
         idx = p.multinomial(num_samples=1).item()
         self.params = nn.Parameter(set_existing_vecs[idx].clone(), requires_grad=False)
         self.eval_fn = eval_fn
+        self.thresh = thresh
+        self.n_sigmas = n_sigmas
+        self.mu = None
+        self.cb = None
         self.sample_r = None
         self.activation_grad = None
+        self.lower_ci_under_thresh = None
 
     def evaluate(self):
         """Evaluate current `self` (a tensor)
         to find its value according to `eval_fn`"""
         self.transform()
-        sample_r, activation_grad, _, _ = self.eval_fn(self.params.data)
-        sample_r = sample_r.detach().item()
+        sample_r, activation_grad, mu, cb = self.eval_fn(self.params.data)
         self.activation_grad = activation_grad
-        self.sample_r = sample_r
-        return sample_r
+        self.sample_r = sample_r.detach().item()
+        self.mu = mu
+        self.cb = cb
+        self.lower_ci_under_thresh = (mu - 3 * cb) <= self.thresh
+        return self.sample_r
 
     def transform(self):
         vec = torch.clip(self.params, *PullPolicy.bounds).to(device)
@@ -111,8 +125,18 @@ def gen_warmup_vecs_and_rewards(n_warmup, combis, risks, p):
     return vecs, rewards
 
 
-def find_best_member(agent_eval_fn, de_config, proba, set_init_vecs, seed):
-    """Run DE to find the best vector for the current agent
+def find_best_member(
+    agent_eval_fn,
+    de_config,
+    proba,
+    set_init_vecs,
+    seed,
+    ci_thresh,
+    threshold,
+    n_sigmas_conf,
+):
+    """
+    Run DE to find the best vector for the current agent
 
     Args:
         agent_eval_fn (function): agent's evaluation function
@@ -120,10 +144,13 @@ def find_best_member(agent_eval_fn, de_config, proba, set_init_vecs, seed):
         proba (torch.Tensor): initialization probas for vectors in DE
         set_init_vecs (torch.Tensor): available vectors to initialize from
         seed (int): seed to set up DE
-
+        ci_thresh (bool): if True, forces reward sorting to get the best member which has a lower ci intersecting with threshold.
+        thresh (float): threshold for CI intersection. If ci_thresh = True, then this must be set to a real number.
+        n_sigmas_conf (float): Number of sigmas to consider for confidence (sigma-rule) around network activation (mu)
     Returns:
         torch.Tensor: Best member from DE's population
     """
+
     # Reseed DE optim to diversify populations across timesteps
     de_config.seed = seed
     config = Config(default_config)
@@ -134,13 +161,28 @@ def find_best_member(agent_eval_fn, de_config, proba, set_init_vecs, seed):
         eval_fn: object = agent_eval_fn
         p: torch.Tensor = proba
         set_existing_vecs: torch.Tensor = set_init_vecs
+        thresh: float = threshold
+        n_sigmas: float = n_sigmas_conf
 
     config("de")(de_config)
 
     de = DE(config)
     de.train()
 
-    return de.population[de.current_best]
+    # TODO verify this works properly
+    # If this is true, then returned best member must
+    # have its lower CI bound be lower or equal to the
+    # threshold
+    best = de.population[de.current_best]
+
+    if ci_thresh and not best.lower_ci_under_thresh:
+        sorted_rewards_idx = np.flip(np.argsort(de.rewards))
+        sorted_pop = de.population[sorted_rewards_idx]
+        sorted_pop_inter = [m.lower_ci_under_thresh for m in sorted_pop]
+        first_occ_idx = np.where(sorted_pop_inter)[0][0]
+        return sorted_pop[first_occ_idx]
+    else:
+        return best
 
 
 def make_deterministic(seed=42):
@@ -173,7 +215,9 @@ def compute_jaccard(found_solution, true_solution):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train an agent on a given dataset")
+    parser = argparse.ArgumentParser(
+        description="Train a NeuralTS/UCB agent on a given dataset"
+    )
     parser.add_argument(
         "-T", "--trials", type=int, required=True, help="Number of trials for the agent"
     )
@@ -188,6 +232,11 @@ def parse_args():
         help="Good and bad action threshold",
     )
     parser.add_argument(
+        "--ci_thresh",
+        action="store_true",
+        help="Tells the agent to play the best arm which has an interesecting lower CI with the threshold",
+    )
+    parser.add_argument(
         "-s",
         "--seed",
         type=int,
@@ -198,14 +247,14 @@ def parse_args():
         "-w",
         "--width",
         type=int,
-        default=100,
+        default=128,
         help="Width of the NN (number of neurons)",
     )
     parser.add_argument(
         "-l",
         "--layers",
         type=int,
-        default=1,
+        default=2,
         help="Number of hidden layers",
     )
     parser.add_argument(
@@ -213,7 +262,7 @@ def parse_args():
         "--reg",
         type=float,
         default=1,
-        help="Regularization factor",
+        help="Regularization factor for the bandit AND weight decay (lambda)",
     )
     parser.add_argument(
         "-e",
@@ -223,10 +272,10 @@ def parse_args():
         help="Exploration multiplier",
     )
     parser.add_argument(
-        "--n_optim_steps",
+        "--n_epochs",
         type=int,
-        default=100,
-        help="Number of gradient steps in NeuralTS/NeuralUCB",
+        default=10,
+        help="Number of epochs / gradient steps (if full SGD) in NeuralTS/NeuralUCB",
     )
     parser.add_argument(
         "--lr",
@@ -282,6 +331,17 @@ def parse_args():
         default=1e-1,
         help="Learning rate for the population optimizer (if gradient based)",
     )
+    parser.add_argument(
+        "--batch_size",
+        default=128,
+        help="Learning rate for the population optimizer (if gradient based)",
+    )
+    parser.add_argument(
+        "--n_sigmas",
+        type=float,
+        default=3,
+        help="Number of sigmas to consider (sigma-rule) for confidence around a network's given activation",
+    )
     args = parser.parse_args()
     return args
 
@@ -317,11 +377,11 @@ def load_dataset(dataset_name, path_to_dataset=None):
     return combis, risks, pat_vecs, n_obs, n_dim
 
 
-def compute_metrics(agent, combis, thresh, pat_vecs, true_sol):
+def compute_metrics(agent, combis, thresh, pat_vecs, true_sol, n_sigmas):
     # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
-    sol, _, _ = agent.find_solution_in_vecs(combis, thresh)
+    sol, _, _ = agent.find_solution_in_vecs(combis, thresh, n_sigmas)
     # Parmis les patrons dangereux (ground truth), combien j'en trouve tels quels
-    sol_pat, _, _ = agent.find_solution_in_vecs(pat_vecs, thresh)
+    sol_pat, _, _ = agent.find_solution_in_vecs(pat_vecs, thresh, n_sigmas)
     # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
     jaccard, n_inter = compute_jaccard(sol, true_sol)
     # Combien de patrons tels quels j'ai flag ?
@@ -333,3 +393,22 @@ def compute_metrics(agent, combis, thresh, pat_vecs, true_sol):
         ratio_app = n_inter / len(sol)
 
     return jaccard, ratio_app, percent_found_pat, n_inter
+
+
+class Network(nn.Module):
+    """Deprecated, maintained here for compatibility"""
+
+    def __init__(self, dim, n_hidden_layers, hidden_size=100):
+        super().__init__()
+        self.activation = nn.ReLU()
+        self.layers = nn.ModuleList()
+
+        self.layers.append(nn.Linear(dim, hidden_size))
+        for _ in range(n_hidden_layers - 1):
+            self.layers.append(nn.Linear(hidden_size, hidden_size))
+        self.layers.append(nn.Linear(hidden_size, 1))
+
+    def forward(self, x):
+        for layer in self.layers[:-1]:
+            x = self.activation(layer(x))
+        return self.layers[-1](x)
