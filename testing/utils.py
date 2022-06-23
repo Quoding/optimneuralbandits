@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+from torchviz import make_dot
 from detorch import DE, Policy, Strategy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
@@ -169,7 +170,6 @@ def find_best_member(
     de = DE(config)
     de.train()
 
-    # TODO verify this works properly
     # If this is true, then returned best member must
     # have its lower CI bound be lower or equal to the
     # threshold
@@ -330,6 +330,7 @@ def parse_args():
     parser.add_argument(
         "--batch_size",
         default=128,
+        type=int,
         help="Learning rate for the population optimizer (if gradient based)",
     )
     parser.add_argument(
@@ -359,10 +360,12 @@ def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
     # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
     for i in range(n_steps):
         optimizer.zero_grad()
-
         # Evaluate
         sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
-
+        print(sample_r)
+        dot = make_dot(sample_r)
+        dot.format = "svg"
+        dot.render()
         # Record input_vecs and values in the population
         population_values.append(sample_r.item())
 
@@ -390,7 +393,7 @@ def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
     # Coerce to an existing vector via L1 norm
     a_t, idx = change_to_closest_existing_vector(best_vec, existing_vecs)
     sample_r, g_list, mu, cb = agent_eval_fn(a_t)
-
+    input()
     return a_t, idx, g_list
 
 
