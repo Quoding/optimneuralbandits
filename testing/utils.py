@@ -351,7 +351,7 @@ def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
     # Generate a random vector to optimize
     input_vec = torch.randint(0, 2, size=(1, existing_vecs.shape[1])).float()
     input_vec.requires_grad = True
-    optimizer = torch.optim.SGD([input_vec], lr=lr)
+    optimizer = torch.optim.Adam([input_vec], lr=lr)
 
     population = input_vec.detach().clone()
     population_values = []
