@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+
+# from torchviz import make_dot
 from detorch import DE, Policy, Strategy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
@@ -362,9 +364,9 @@ def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
         # Evaluate
         sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
         print(sample_r)
-        dot = make_dot(sample_r)
-        dot.format = "svg"
-        dot.render()
+        # dot = make_dot(sample_r)
+        # dot.format = "svg"
+        # dot.render()
         # Record input_vecs and values in the population
         population_values.append(sample_r.item())
 
