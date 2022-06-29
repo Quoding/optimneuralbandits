@@ -1,0 +1,4 @@
+810
+  0%|          | 0/810 [00:00<?, ?it/s]doing {'width': 32, 'hidden': 1, 'n_obs': 100, 'dataset': '50_rx_100000_combis_4_patterns_3', 'decay': 0, 'lr': 0.01, 'custom_layers': False}
+[]
+  0%|          | 1/810 [00:45<10:18:54, 45.90s/it]doing {'width': 32, 'hidden': 1, 'n_obs': 100, 'dataset': '50_rx_100000_combis_4_patterns_3', 'decay': 0, 'lr': 0.1, 'custom_layers': False}

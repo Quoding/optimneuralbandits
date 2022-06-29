@@ -5,8 +5,9 @@ testing/datasets/patterns/*.json
 testing/viz/images/*
 testing/saves/*
 .vscode
-testing/debug/
-
+testing/debug/images/
+testing/debug/metrics/
+testing/debug/runs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
