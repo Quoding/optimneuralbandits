@@ -2,7 +2,7 @@
 *.pth
 testing/datasets/combinations/*.csv
 testing/datasets/patterns/*.json
-testing/images/*
+testing/viz/images/*
 testing/saves/*
 .vscode
 testing/debug/

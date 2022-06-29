@@ -1,3 +1,4 @@
+import logging
 import time
 import types
 from copy import deepcopy
@@ -8,11 +9,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
 from detorch import DE, Policy, Strategy
 from detorch.config import Config, default_config
 from torch import optim
-import logging
+from torch.utils.data import DataLoader, Dataset
+from sklearn.model_selection import StratifiedShuffleSplit
 
 logging.basicConfig(level=logging.INFO)
 
@@ -40,6 +41,10 @@ class ReplayDataset(Dataset):
     def __init__(self, features=None, rewards=None):
         self.hist_features = features
         self.hist_rewards = rewards
+        self.train_features = None
+        self.train_rewards = None
+        self.val_features = None
+        self.val_rewards = None
 
     def __len__(self):
         return len(self.hist_rewards)
@@ -54,6 +59,56 @@ class ReplayDataset(Dataset):
     def add(self, features, reward):
         self.hist_features = torch.cat((self.hist_features, features))
         self.hist_rewards = torch.cat((self.hist_rewards, reward))
+
+    def update_validation_set(self, split_size=0.1):
+
+        return
+
+
+class VariableNet(nn.Module):
+    def __init__(self, dim, layer_widths):
+        super().__init__()
+        self.layers = nn.ModuleList()
+        self.layers.append(nn.Linear(dim, layer_widths[0]))
+        self.layers.append(nn.ReLU())
+
+        for i in range(len(layer_widths) - 1):
+            self.layers.append(nn.Linear(layer_widths[i], layer_widths[i + 1]))
+            self.layers.append(nn.ReLU())
+
+        self.layers.append(nn.Linear(layer_widths[-1], 1))
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        return x
+
+
+class EarlyStopping:
+    def __init__(self, patience):
+        self.patience = patience
+        self.min_loss = float("inf")
+        self.count = 0
+        self.train_activ = None
+        self.val_activ = None
+
+    def __call__(self, cur_loss, train_activ, val_activ):
+        # If no improvement
+        if cur_loss >= self.min_loss:
+            self.count += 1
+        else:  # Improvement, store activs
+            self.count = 0
+            self.store(train_activ, val_activ)
+            self.min_loss = cur_loss
+
+    def store(self, train_activ, val_activ):
+        self.train_activ = train_activ.detach().clone()
+        self.val_activ = val_activ.detach().clone()
+
+    @property
+    def early_stop(self):
+        if self.count >= self.patience:
+            return True
 
 
 class Network(nn.Module):
