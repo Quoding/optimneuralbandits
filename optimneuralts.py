@@ -190,7 +190,7 @@ class DENeuralTSDiag:
 
     def train(self, n_epochs, lr=1e-2, batch_size=32):
         # For full batch grad descent
-        if batch_size == "full":
+        if batch_size == -1:
             batch_size = len(self.dataset)
 
         # Setup

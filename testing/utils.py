@@ -329,9 +329,9 @@ def parse_args():
     )
     parser.add_argument(
         "--batch_size",
-        default=128,
+        default=32,
         type=int,
-        help="Learning rate for the population optimizer (if gradient based)",
+        help="Batch size for learning (specify -1 for full batch)",
     )
     parser.add_argument(
         "--n_sigmas",
