@@ -14,7 +14,6 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import matplotlib.pyplot as plt
 import matplotlib
-from sklearn.utils import shuffle
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append("../..")
