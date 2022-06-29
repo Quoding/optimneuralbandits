@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-from torchviz import make_dot
 from detorch import DE, Policy, Strategy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk

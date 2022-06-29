@@ -19,10 +19,11 @@ from torch.utils.tensorboard import SummaryWriter
 sys.path.append("../..")
 sys.path.append("..")
 from utils import *
-from tqdm import tqdm
+
+# from tqdm import tqdm
 import random
 from itertools import product
-
+from multiprocessing import Pool
 
 matplotlib.use("Agg")
 # %% [markdown]
@@ -273,7 +274,8 @@ patience = 3
 # * Hidden layers - Obviously
 
 # %%
-for config in tqdm(configs):
+def run_config(config):
+    # for config in tqdm(configs):
     n_layers = config["hidden"]
     width = config["width"]
     n_obs = config["n_obs"]
@@ -403,3 +405,8 @@ for config in tqdm(configs):
 
     save_metrics(train_losses, f"metrics/{exp_dir}/train_losses")
     save_metrics(val_losses, f"metrics/{exp_dir}/val_losses")
+
+
+N_PROCESSES = 8
+with Pool(N_PROCESSES) as p:
+    p.map(run_config, configs)
