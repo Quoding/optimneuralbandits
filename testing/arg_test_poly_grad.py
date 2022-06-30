@@ -103,10 +103,9 @@ logging.info("Warm up over. Starting training")
 #### TRAINING ####
 for i in range(n_trials):
     a_t, idx, best_member_grad = do_gradient_optim(
-        agent.get_sample, pop_optim_n_steps, combis, lr=pop_optim_lr
+        agent, pop_optim_n_members, combis, lr=pop_optim_lr
     )
     r_t = reward_fn(idx)[:, None]
-    a_t = a_t[None, :]
     agent.U += best_member_grad * best_member_grad
 
     agent.dataset.add(a_t, r_t)
@@ -144,3 +143,5 @@ torch.save(ratio_apps, f"{output_dir}/ratio_apps/{seed}.pth")
 torch.save(percent_found_pats, f"{output_dir}/ratio_found_pats/{seed}.pth")
 torch.save(losses, f"{output_dir}/losses/{seed}.pth")
 torch.save(dataset_losses, f"{output_dir}/dataset_losses/{seed}.pth")
+
+# TODO Negative of sample_r should give proper gradients and not 0.

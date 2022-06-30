@@ -10,7 +10,7 @@ import pandas as pd
 import torch
 import torch.nn as nn
 
-# from torchviz import make_dot
+from torchviz import make_dot
 from detorch import DE, Policy, Strategy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
@@ -109,7 +109,7 @@ def change_to_closest_existing_vector(vec, set_existing_vecs):
     """
     dists = torch.norm(vec - set_existing_vecs, dim=1, p=1)
     knn_idx = dists.topk(1, largest=False).indices[0]
-    return set_existing_vecs[knn_idx], knn_idx
+    return set_existing_vecs[knn_idx][None, :], knn_idx
 
 
 def gen_warmup_vecs_and_rewards(n_warmup, combis, risks, p):
@@ -285,7 +285,7 @@ def parse_args():
         "--style",
         type=str,
         default="ts",
-        choices=["ts", "ucb"],
+        choices=["ts", "rts", "ucb"],
         help="Choose between NeuralTS and NeuralUCB to train",
     )
 
@@ -349,7 +349,7 @@ def parse_args():
     return args
 
 
-def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
+def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # Generate a random vector to optimize
     input_vec = torch.randint(0, 2, size=(1, existing_vecs.shape[1])).float()
     input_vec.requires_grad = True
@@ -357,28 +357,39 @@ def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
 
     population = input_vec.detach().clone()
     population_values = []
-
+    agent.net.eval()
     # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
     for i in range(n_steps):
+        # Clear gradients for sample
         optimizer.zero_grad()
+        agent.net.zero_grad()
+
         # Evaluate
-        sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
-        print(sample_r)
-        # dot = make_dot(sample_r)
-        # dot.format = "svg"
-        # dot.render()
+        sample_r, g_list, mu, cb = agent.get_sample(input_vec)
+        # Clear gradient from sampling so backprop is clean
+        optimizer.zero_grad()
+        agent.net.zero_grad()
+
+        dot = make_dot(-sample_r)
+        dot.format = "svg"
+        dot.render()
+
         # Record input_vecs and values in the population
         population_values.append(sample_r.item())
 
         # Backprop
-        sample_r = -sample_r
+        sample_r = sample_r - (2 * sample_r)
         sample_r.backward()
+
         optimizer.step()
 
         population = torch.cat((population, input_vec.detach().clone()))
 
+    # Clear gradients for sample
+    optimizer.zero_grad()
+    agent.net.zero_grad()
     # Record final optimized input_vecs in population since they're the last optimizer steps product
-    sample_r, g_list, mu, cb = agent_eval_fn(input_vec)
+    sample_r, g_list, mu, cb = agent.get_sample(input_vec)
 
     population_values.append(sample_r.item())
 
@@ -393,7 +404,10 @@ def do_gradient_optim(agent_eval_fn, n_steps, existing_vecs, lr):
 
     # Coerce to an existing vector via L1 norm
     a_t, idx = change_to_closest_existing_vector(best_vec, existing_vecs)
-    sample_r, g_list, mu, cb = agent_eval_fn(a_t)
+    # print(a_t.shape)
+    _, g_list = agent.compute_activation_and_grad(a_t)
+    # print(best_vec)
+    # print(a_t)
     input()
     return a_t, idx, g_list
 
