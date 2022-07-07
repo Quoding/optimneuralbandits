@@ -19,22 +19,23 @@ logging.basicConfig(level=logging.INFO)
 
 
 class NetworkDropout(nn.Module):
-    def __init__(self, dim, hidden_size=100, mask=None):
+    def __init__(self, dim, hidden_size=100, mask=None, dropout=False):
         super().__init__()
         self.fc1 = nn.Linear(dim, hidden_size)
         self.activate = nn.ReLU()
         self.fc2 = nn.Linear(hidden_size, 1)
         self.mask = mask
         self.hidden_size = hidden_size
+        if dropout:
+            self.dropout = nn.Dropout(dropout)
+        else:
+            self.dropout = nn.Identity()
 
     def set_mask(self, mask):
         self.mask = mask
 
     def forward(self, x):
-        if self.mask is None:
-            return self.fc2(self.activate(self.fc1(x)))
-        else:
-            return self.fc2(self.activate(self.mask * self.fc1(x)))
+        return self.fc2(self.activate(self.dropout(self.fc1(x))))
 
 
 class ReplayDataset(Dataset):
@@ -111,26 +112,6 @@ class EarlyStopping:
             return True
 
 
-# class Network(nn.Module):
-#     def __init__(self, dim, n_hidden_layers, hidden_size=100):
-#         super().__init__()
-#         self.layers = nn.ModuleList()
-
-#         self.layers.append(nn.Linear(dim, hidden_size))
-#         self.layers.append(nn.ReLU())
-
-#         for _ in range(n_hidden_layers - 1):
-#             self.layers.append(nn.Linear(hidden_size, hidden_size))
-#             self.layers.append(nn.ReLU())
-
-#         self.layers.append(nn.Linear(hidden_size, 1))
-
-#     def forward(self, x):
-#         for layer in self.layers[:-1]:
-#             x = layer(x)
-#         return self.layers[-1](x)
-
-
 class Network(nn.Module):
     def __init__(self, dim, n_hidden_layers, hidden_size=100):
         super().__init__()
@@ -175,14 +156,13 @@ class DENeuralTSDiag:
         self.decay = decay
 
         self.loss_func = nn.MSELoss()
-        # self.vec_history = torch.tensor([]).unsqueeze(0).cuda()
-        # self.reward_history = torch.tensor([]).unsqueeze(0).cuda()
         self.dataset = ReplayDataset()
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
         self.optimizer_class = optimizers[optim_string]
 
     def compute_activation_and_grad(self, vec):
+
         self.net.zero_grad()
         mu = self.net(vec)
         mu.backward(retain_graph=True)
@@ -209,7 +189,9 @@ class DENeuralTSDiag:
 
         return sample_r, g_list, mu.detach().item(), sigma.detach().item()
 
-    def train(self, n_epochs, lr=1e-2, batch_size=32):
+    def train(
+        self, n_epochs, lr=1e-2, batch_size=-1, generator=torch.Generator(device="cuda")
+    ):
         # For full batch grad descent
         if batch_size == -1:
             batch_size = len(self.dataset)
@@ -225,7 +207,7 @@ class DENeuralTSDiag:
             self.dataset,
             batch_size=batch_size,
             shuffle=True,
-            generator=torch.Generator(device="cuda"),
+            generator=generator,
         )
 
         # Train loop
