@@ -13,6 +13,7 @@ import torch.nn as nn
 from torch.nn.functional import conv1d
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
+from torch.nn.modules.loss import _Loss
 
 sys.path.append("../..")
 sys.path.append("..")
@@ -26,122 +27,205 @@ device = torch.device("cuda")
 class Network(nn.Module):
     def __init__(self, dim, n_hidden_layers, hidden_size=100, dropout_rate=None):
         super().__init__()
-        self.layers = nn.ModuleList()
+        layers = nn.ModuleList()
 
-        self.layers.append(nn.Linear(dim, hidden_size))
+        layers.append(nn.Linear(dim, hidden_size))
         if dropout_rate is not None:
-            self.layers.append(nn.Dropout(dropout_rate))
-        self.layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))
+        layers.append(nn.ReLU())
 
         for _ in range(n_hidden_layers - 1):
-            self.layers.append(nn.Linear(hidden_size, hidden_size))
+            layers.append(nn.Linear(hidden_size, hidden_size))
             if dropout_rate is not None:
-                self.layers.append(nn.Dropout(dropout_rate))
-            self.layers.append(nn.ReLU())
+                layers.append(nn.Dropout(dropout_rate))
+            layers.append(nn.ReLU())
 
-        self.layers.append(nn.Linear(hidden_size, 1))
+        layers.append(nn.Linear(hidden_size, 1))
+
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        for layer in self.layers[:-1]:
-            x = layer(x)
-        return self.layers[-1](x)
+        return self.model(x)
+
+
+class AE(nn.Module):
+    def __init__(self, input_dim, embed_dim, layer_widths):
+        super().__init__()
+        # Define encoder
+        enc_layers = nn.ModuleList()
+
+        enc_layers.append(nn.Linear(input_dim, layer_widths[0]))
+        enc_layers.append(nn.ReLU())
+
+        for i in range(len(layer_widths) - 1):
+            enc_layers.append(nn.Linear(layer_widths[i], layer_widths[i + 1]))
+            enc_layers.append(nn.ReLU())
+
+        enc_layers.append(nn.Linear(layer_widths[-1], embed_dim))
+        enc_layers.append(nn.ReLU())
+
+        # Definer decoder
+        dec_layers = nn.ModuleList()
+
+        dec_layers.append(nn.Linear(embed_dim, layer_widths[-1]))
+        dec_layers.append(nn.ReLU())
+
+        for i in range(len(layer_widths) - 2, -1, -1):
+            dec_layers.append(nn.Linear(layer_widths[i - 1], layer_widths[i]))
+            dec_layers.append(nn.ReLU())
+
+        dec_layers.append(nn.Linear(layer_widths[0], input_dim))
+        dec_layers.append(nn.Sigmoid())
+
+        self.encoder = nn.Sequential(*enc_layers)
+        self.decoder = nn.Sequential(*dec_layers)
+
+    def fit(self, n_epochs, X_train, X_val, writer, lr=0.01, batch_size=32, patience=5):
+        optim = torch.optim.Adam(self.parameters(), lr=lr)
+        criterion = nn.BCELoss()
+        data = CombiDataset(X_train, torch.zeros((len(X_train))))
+        trainloader = torch.utils.data.DataLoader(data, batch_size=batch_size)
+        early_stopping = EarlyStopping(patience=patience)
+        for e in range(n_epochs):
+            for X, _ in trainloader:
+                optim.zero_grad()
+                rec = self.forward(X)
+                l = criterion(rec, X)
+                l.backward()
+                optim.step()
+            with torch.no_grad():
+                val_activ = self.forward(X_val)
+                val_loss = criterion(val_activ, X_val)
+
+                train_activ = self.forward(X_train)
+                train_loss = criterion(train_activ, X_train)
+
+                val_loss = val_loss.item()
+                train_loss = train_loss.item()
+
+                writer.add_scalar("Loss_ae/train", train_loss, e)
+                writer.add_scalar("Loss_ae/val", val_loss, e)
+
+            early_stopping(val_loss, train_activ, val_activ)
+
+            if early_stopping.early_stop:
+                return
+
+    def forward(self, x):
+        return self.decoder(self.encoder(x))
 
 
 class VariableNet(nn.Module):
     def __init__(self, dim, layer_widths, dropout_rate=False):
         super().__init__()
-        self.layers = nn.ModuleList()
-        self.layers.append(nn.Linear(dim, layer_widths[0]))
+        layers = nn.ModuleList()
+        layers.append(nn.Linear(dim, layer_widths[0]))
         if dropout_rate:
-            self.layers.append(nn.Dropout(dropout_rate))
-        self.layers.append(nn.ReLU())
+            layers.append(nn.Dropout(dropout_rate))
+        layers.append(nn.ReLU())
 
         for i in range(len(layer_widths) - 1):
-            self.layers.append(nn.Linear(layer_widths[i], layer_widths[i + 1]))
+            layers.append(nn.Linear(layer_widths[i], layer_widths[i + 1]))
             if dropout_rate:
-                self.layers.append(nn.Dropout(dropout_rate))
-            self.layers.append(nn.ReLU())
+                layers.append(nn.Dropout(dropout_rate))
+            layers.append(nn.ReLU())
 
-        self.layers.append(nn.Linear(layer_widths[-1], 1))
+        layers.append(nn.Linear(layer_widths[-1], 1))
+
+        self.model = nn.Sequential(*layers)
 
     def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
-        return x
+        return self.model(x)
 
 
 class CombiDataset(Dataset):
-    def __init__(self, combis, risks):
+    def __init__(self, combis, labels, classif_thresh=None):
         self.combis = combis
-        self.risks = risks
+        self.labels = labels
 
-    def get_weights(self, kern_size=5, kern_sigma=2, reweight="sqrt_inv"):
-        bin_size = 0.1
-        # Implements label distribution smoothing (Delving into Deep Imbalanced Regression, https://arxiv.org/abs/2102.09554)
-        # Discretize the risks (labels used later)
-        flat_risks = self.risks.flatten()
-        # print(flat_risks)
-        discrete_risks = torch.floor(flat_risks * 10) / 10
-        discrete_risks = np.around(discrete_risks.cpu().numpy(), 1)
-        # print(discrete_risks)
-        # Get the gaussian filter
-        kernel = gaussian_fn(kern_size, kern_sigma)[None, None]
+    def get_weights(
+        self, kern_size=5, kern_sigma=2, reweight="sqrt_inv", classif_thresh=None
+    ):
+        if classif_thresh is None:
+            bin_size = 0.1
+            factor = 10
+            # Implements label distribution smoothing (Delving into Deep Imbalanced Regression, https://arxiv.org/abs/2102.09554)
+            # Discretize the risks (labels used later)
+            flat_labels = self.labels.flatten()
+            # print(flat_risks)
+            discrete_risks = torch.floor(flat_labels * factor) / factor
+            discrete_risks = np.around(discrete_risks.cpu().numpy(), 1)
+            # print(discrete_risks)
+            # Get the gaussian filter
+            kernel = gaussian_fn(kern_size, kern_sigma)[None, None]
 
-        # Determine the bin edges
-        min_bin = floor(min(flat_risks) * 10) / 10
-        max_bin = ceil(max(flat_risks) * 10) / 10
+            # Determine the bin edges
+            min_bin = floor(min(flat_labels) * factor) / factor
+            max_bin = ceil(max(flat_labels) * factor) / factor
 
-        # Handles case where maximum is exactly on the edge of the last bin
-        if max(flat_risks).item() == max_bin:
-            max_bin += bin_size
-            print(f"new max bin = {max_bin}")
+            # Handles case where maximum is exactly on the edge of the last bin
+            if max(flat_labels).item() == max_bin:
+                max_bin += bin_size
 
-        n_bins = round(
-            (max_bin - min_bin) / 0.1
-        )  # Deal with poor precision in Python...
-        list_bin_edges = np.around(
-            [min_bin + (bin_size * i) for i in range(n_bins + 1)], 1
-        ).astype("float32")
-        bin_edges = torch.from_numpy(list_bin_edges)
+            n_bins = round(
+                (max_bin - min_bin) / 0.1
+            )  # Deal with poor precision in Python...
+            list_bin_edges = np.around(
+                [min_bin + (bin_size * i) for i in range(n_bins + 1)], 1
+            ).astype("float32")
+            bin_edges = torch.from_numpy(list_bin_edges)
 
-        # Build discretized distribution with histogram
-        hist = torch.histogram(flat_risks.cpu(), bin_edges)
-        weights = hist.hist
+            # Build discretized distribution with histogram
+            hist = torch.histogram(flat_labels.cpu(), bin_edges)
+            weights = hist.hist
 
-        # wplot = weights.cpu().numpy()
-        # plt.bar(list_bin_edges[:-1], wplot, width=0.1, edgecolor="black")
-        # plt.title("Distribution des risques relatifs (discret)")
-        # plt.xlabel("Intervalles (0.1)")
-        # plt.ylabel("Compte")
-        # plt.show()
+            # wplot = weights.cpu().numpy()
+            # plt.bar(list_bin_edges[:-1], wplot, width=0.1, edgecolor="black")
+            # plt.title("Distribution des risques relatifs (discret)")
+            # plt.xlabel("Intervalles (0.1)")
+            # plt.ylabel("Compte")
+            # plt.show()
 
-        if reweight == "sqrt_inv":
-            weights = torch.sqrt(weights)
+            if reweight == "sqrt_inv":
+                weights = torch.sqrt(weights)
 
-        # Apply label distribution smoothing
-        weights = conv1d(weights[None, None].cuda(), kernel, padding=(kern_size // 2))
-        weights = 1 / weights
+            # Apply label distribution smoothing
+            weights = conv1d(
+                weights[None, None].cuda(), kernel, padding=(kern_size // 2)
+            )
+            weights = 1 / weights
 
-        # Get weights for dataset
-        weight_bins = {list_bin_edges[i]: weights[0][0][i] for i in range(n_bins)}
-        weights_per_obs = [weight_bins[risk] for risk in discrete_risks]
+            # Get weights for dataset
+            weight_bins = {list_bin_edges[i]: weights[0][0][i] for i in range(n_bins)}
+            weights_per_obs = [weight_bins[risk] for risk in discrete_risks]
 
-        # k = list(weight_bins.keys())
-        # v = list(weight_bins.values())
-        # v = [val.item() for val in v]
+            # k = list(weight_bins.keys())
+            # v = list(weight_bins.values())
+            # v = [val.item() for val in v]
 
-        # plt.bar(k, v, width=0.1, edgecolor="black")
-        # plt.title("Poids d'echantillonnage des observations")
-        # plt.xlabel("Intervalles (0.1)")
-        # plt.ylabel("Poids")
-        # plt.show()
-        return weights_per_obs
+            # plt.bar(k, v, width=0.1, edgecolor="black")
+            # plt.title("Poids d'echantillonnage des observations")
+            # plt.xlabel("Intervalles (0.1)")
+            # plt.ylabel("Poids")
+            # plt.show()
+            return weights_per_obs
+        else:
+            n_obs = self.labels.shape[0]
+            n_pos = self.labels.sum()
+            n_neg = n_obs - n_pos
+
+            # Weights inversely proportional to the number of observations for that label
+            weight_pos = 1 / (n_pos / n_obs)
+            weight_neg = 1 / (n_neg / n_obs)
+
+            weights = torch.where(self.labels == 1.0, weight_pos, weight_neg)
+            return weights
 
     def __len__(self):
-        return len(self.risks)
+        return len(self.labels)
 
     def __getitem__(self, idx):
-        return self.combis[idx], self.risks[idx]
+        return self.combis[idx], self.labels[idx]
 
 
 class EarlyStopping:
@@ -193,7 +277,7 @@ def load_dataset(dataset_path):
     return features, risks, patterns, n_obs, n_dim
 
 
-def setup_data(dataset, batch_size, n_obs, reweight=None):
+def setup_data(dataset, batch_size, n_obs, reweight=None, classif_thresh=None):
     combis, risks, _, _, n_dim = load_dataset(dataset)
 
     combis, risks = (
@@ -204,7 +288,11 @@ def setup_data(dataset, batch_size, n_obs, reweight=None):
     X_train, y_train = combis[:n_obs], risks[:n_obs]
     X_val, y_val = combis[n_obs:], risks[n_obs:]
 
-    training_data = CombiDataset(X_train, y_train)
+    if classif_thresh is not None:
+        y_train = (y_train > classif_thresh).float()
+        y_val = (y_val > classif_thresh).float()
+
+    training_data = CombiDataset(X_train, y_train, classif_thresh)
     if reweight is not None:
         print("Using label distribution smoothing")
         w = training_data.get_weights(reweight=reweight)
@@ -272,10 +360,14 @@ def plot_pred_vs_gt(true, pred, title):
     plt.title(title)
     plt.xlabel("Vérité")
     plt.ylabel("Prédiction")
-    plt.ylim(0, 3.5)
-    plt.xlim(0, 3.5)
+    ylim = 3.5
+    xlim = 3.5
+    plt.ylim(0, ylim)
+    plt.xlim(0, xlim)
     plt.scatter(true, pred, alpha=0.1)
-    plt.plot([0, 3], [0, 3], color="black", linestyle="dashed", label="Perfection")
+    plt.plot(
+        [0, xlim], [0, ylim], color="black", linestyle="dashed", label="Perfection"
+    )
     plt.legend()
 
     return fig
@@ -287,8 +379,34 @@ def save_metrics(array, path):
     np.save(path, array)
 
 
-def get_loss(loss_name):
+class QuantileLoss(_Loss):
+    def __init__(self, quantile):
+        super().__init__()
+        self.quantile = quantile
+
+    def forward(self, preds, target):
+        assert not target.requires_grad
+        assert preds.size(0) == target.size(0)
+        errors = target - preds
+        loss = torch.max((self.quantile - 1) * errors, self.quantile * errors)
+        loss = torch.mean(loss)
+        return loss
+
+
+def get_loss(loss_name, quantile=0.9):
     if loss_name == "mse" or loss_name == "rmse":
         return nn.MSELoss()
     elif loss_name == "l1":
         return nn.L1Loss()
+    elif loss_name == "quantile":
+        return QuantileLoss(quantile)
+
+
+def get_layers(n_dim, embed_dim):
+    layers = []
+    d = embed_dim
+    while d < n_dim:
+        layers.append(d)
+        d = 1 << (d).bit_length()
+    layers.reverse()
+    return layers
