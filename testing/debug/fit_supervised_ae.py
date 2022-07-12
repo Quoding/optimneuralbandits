@@ -208,7 +208,6 @@ def run_config(config, exp_dir="test_ae", modifier=""):
         # AE with 64 dim. embeddings
         print("training AE...")
         ae = AE(n_dim, embed_dim, get_layers(n_dim, embed_dim))
-        print(ae)
         ae.fit(
             n_epochs,
             training_data,
