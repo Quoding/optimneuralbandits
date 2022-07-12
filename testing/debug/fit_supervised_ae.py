@@ -184,7 +184,7 @@ def run_config(config, exp_dir="test_ae", modifier=""):
         seed_val_losses = [np.nan] * n_epochs
         seed_train_r2s = [np.nan] * n_epochs
         seed_val_r2s = [np.nan] * n_epochs
-        early_stopping = EarlyStopping(patience=patience)
+        early_stopping = EarlyStoppingActiv(patience=patience)
 
         make_deterministic(seed=seed)
 
@@ -371,6 +371,6 @@ def run_config(config, exp_dir="test_ae", modifier=""):
 
 
 # %%
-for config in configs[49:]:
+for config in configs:
     print(config)
     run_config(config)

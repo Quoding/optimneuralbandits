@@ -2,7 +2,6 @@ import json
 import logging
 import os
 import sys
-from math import ceil, floor
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -25,17 +24,23 @@ device = torch.device("cuda")
 
 
 class Network(nn.Module):
-    def __init__(self, dim, n_hidden_layers, hidden_size=100, dropout_rate=None):
+    def __init__(
+        self, dim, n_hidden_layers, hidden_size=100, dropout_rate=None, batch_norm=False
+    ):
         super().__init__()
         layers = nn.ModuleList()
 
         layers.append(nn.Linear(dim, hidden_size))
+        if batch_norm:
+            layers.append(nn.BatchNorm1d(hidden_size))
         if dropout_rate is not None:
             layers.append(nn.Dropout(dropout_rate))
         layers.append(nn.ReLU())
 
         for _ in range(n_hidden_layers - 1):
             layers.append(nn.Linear(hidden_size, hidden_size))
+            if batch_norm:
+                layers.append(nn.BatchNorm1d(hidden_size))
             if dropout_rate is not None:
                 layers.append(nn.Dropout(dropout_rate))
             layers.append(nn.ReLU())
@@ -107,7 +112,7 @@ class AE(nn.Module):
         criterion = nn.BCELoss()
         trainloader = torch.utils.data.DataLoader(training_data, batch_size=batch_size)
         X_train = training_data.combis
-        early_stopping = EarlyStopping(patience=patience)
+        early_stopping = EarlyStoppingActiv(patience=patience)
         for e in range(n_epochs):
             for X, _ in trainloader:
                 optim.zero_grad()
@@ -174,31 +179,11 @@ class CombiDataset(Dataset):
             # Implements label distribution smoothing (Delving into Deep Imbalanced Regression, https://arxiv.org/abs/2102.09554)
             # Discretize the risks (labels used later)
             flat_labels = self.labels.flatten()
-            # print(flat_risks)
-            discrete_risks = torch.floor(flat_labels * factor) / factor
-            discrete_risks = np.around(discrete_risks.cpu().numpy(), 1)
-            # print(discrete_risks)
-            # Get the gaussian filter
-            kernel = gaussian_fn(kern_size, kern_sigma)[None, None]
+            discrete_risks = discretize_targets(flat_labels, factor)
 
-            # Determine the bin edges
-            min_bin = floor(min(flat_labels) * factor) / factor
-            max_bin = ceil(max(flat_labels) * factor) / factor
-
-            # Handles case where maximum is exactly on the edge of the last bin
-            if max(flat_labels).item() == max_bin:
-                max_bin += bin_size
-
-            n_bins = round(
-                (max_bin - min_bin) / 0.1
-            )  # Deal with poor precision in Python...
-            list_bin_edges = np.around(
-                [min_bin + (bin_size * i) for i in range(n_bins + 1)], 1
-            ).astype("float32")
-            bin_edges = torch.from_numpy(list_bin_edges)
-
-            # Build discretized distribution with histogram
-            hist = torch.histogram(flat_labels.cpu(), bin_edges)
+            hist, n_bins, list_bin_edges = build_histogram(
+                flat_labels, factor, bin_size
+            )
             weights = hist.hist
 
             # wplot = weights.cpu().numpy()
@@ -211,7 +196,9 @@ class CombiDataset(Dataset):
             if reweight == "sqrt_inv":
                 weights = torch.sqrt(weights)
 
-            # Apply label distribution smoothing
+            # Apply label distribution smoothing with gaussian filter
+            # Get the gaussian filter
+            kernel = gaussian_fn(kern_size, kern_sigma)[None, None]
             weights = conv1d(
                 weights[None, None].cuda(), kernel, padding=(kern_size // 2)
             )
@@ -250,7 +237,7 @@ class CombiDataset(Dataset):
         return self.combis[idx], self.labels[idx]
 
 
-class EarlyStopping:
+class EarlyStoppingActiv:
     def __init__(self, patience):
         self.patience = patience
         self.min_loss = float("inf")
@@ -377,7 +364,7 @@ def plot_losses(n_epochs, train_losses, val_losses):
     return fig
 
 
-def plot_pred_vs_gt(true, pred, title):
+def plot_pred_vs_gt(train_true, train_pred, val_true, val_pred, title):
     fig = plt.figure()
     plt.title(title)
     plt.xlabel("Vérité")
@@ -386,7 +373,10 @@ def plot_pred_vs_gt(true, pred, title):
     xlim = 3.5
     plt.ylim(0, ylim)
     plt.xlim(0, xlim)
-    plt.scatter(true, pred, alpha=0.1)
+    plt.scatter(val_true, val_pred, alpha=0.1, color="tab:orange", label="Validation")
+    plt.scatter(
+        train_true, train_pred, alpha=0.1, color="tab:blue", label="Entrainement"
+    )
     plt.plot(
         [0, xlim], [0, ylim], color="black", linestyle="dashed", label="Perfection"
     )

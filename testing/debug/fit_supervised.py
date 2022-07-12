@@ -130,7 +130,7 @@ def run_config(config, exp_dir="test_r2", modifier="l1loss"):
         seed_val_losses = [np.nan] * n_epochs
         seed_train_r2s = [np.nan] * n_epochs
         seed_val_r2s = [np.nan] * n_epochs
-        early_stopping = EarlyStopping(patience=patience)
+        early_stopping = EarlyStoppingActiv(patience=patience)
 
         make_deterministic(seed=seed)
 
