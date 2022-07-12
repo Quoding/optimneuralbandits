@@ -51,6 +51,14 @@ class Network(nn.Module):
 class AE(nn.Module):
     def __init__(self, input_dim, embed_dim, layer_widths):
         super().__init__()
+
+        self.encoder = self.create_encoder(input_dim, embed_dim, layer_widths)
+        self.decoder = self.create_decoder(input_dim, embed_dim, layer_widths)
+
+    def create_encoder(self, input_dim, embed_dim, layer_widths):
+        if len(layer_widths) == 0:
+            return nn.Sequential(nn.Linear(input_dim, embed_dim), nn.ReLU())
+
         # Define encoder
         enc_layers = nn.ModuleList()
 
@@ -64,27 +72,41 @@ class AE(nn.Module):
         enc_layers.append(nn.Linear(layer_widths[-1], embed_dim))
         enc_layers.append(nn.ReLU())
 
+        return nn.Sequential(*enc_layers)
+
+    def create_decoder(self, input_dim, embed_dim, layer_widths):
+        if len(layer_widths) == 0:
+            return nn.Sequential(nn.Linear(embed_dim, input_dim), nn.Sigmoid())
+
         # Definer decoder
         dec_layers = nn.ModuleList()
 
         dec_layers.append(nn.Linear(embed_dim, layer_widths[-1]))
         dec_layers.append(nn.ReLU())
 
-        for i in range(len(layer_widths) - 2, -1, -1):
-            dec_layers.append(nn.Linear(layer_widths[i - 1], layer_widths[i]))
+        for i in range(len(layer_widths) - 1, 0, -1):
+            dec_layers.append(nn.Linear(layer_widths[i], layer_widths[i - 1]))
             dec_layers.append(nn.ReLU())
 
         dec_layers.append(nn.Linear(layer_widths[0], input_dim))
         dec_layers.append(nn.Sigmoid())
 
-        self.encoder = nn.Sequential(*enc_layers)
-        self.decoder = nn.Sequential(*dec_layers)
+        return nn.Sequential(*dec_layers)
 
-    def fit(self, n_epochs, X_train, X_val, writer, lr=0.01, batch_size=32, patience=5):
+    def fit(
+        self,
+        n_epochs,
+        training_data,
+        X_val,
+        writer,
+        lr=0.01,
+        batch_size=32,
+        patience=5,
+    ):
         optim = torch.optim.Adam(self.parameters(), lr=lr)
         criterion = nn.BCELoss()
-        data = CombiDataset(X_train, torch.zeros((len(X_train))))
-        trainloader = torch.utils.data.DataLoader(data, batch_size=batch_size)
+        trainloader = torch.utils.data.DataLoader(training_data, batch_size=batch_size)
+        X_train = training_data.combis
         early_stopping = EarlyStopping(patience=patience)
         for e in range(n_epochs):
             for X, _ in trainloader:
@@ -312,7 +334,7 @@ def setup_data(dataset, batch_size, n_obs, reweight=None, classif_thresh=None):
             generator=torch.Generator(device="cuda"),
         )
 
-    return trainloader, X_train, y_train, X_val, y_val, n_dim
+    return trainloader, training_data, X_val, y_val, n_dim
 
 
 def plot_losses(n_epochs, train_losses, val_losses):
@@ -406,7 +428,8 @@ def get_layers(n_dim, embed_dim):
     layers = []
     d = embed_dim
     while d < n_dim:
-        layers.append(d)
+        if d != n_dim and d != embed_dim:
+            layers.append(d)
         d = 1 << (d).bit_length()
     layers.reverse()
     return layers
