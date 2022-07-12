@@ -39,31 +39,25 @@ class NetworkDropout(nn.Module):
 
 
 class ReplayDataset(Dataset):
-    def __init__(self, features=None, rewards=None):
-        self.hist_features = features
-        self.hist_rewards = rewards
-        self.train_features = None
-        self.train_rewards = None
-        self.val_features = None
-        self.val_rewards = None
+    def __init__(
+        self, features=None, rewards=None, val_features=None, val_rewards=None
+    ):
+        self.features = features
+        self.rewards = rewards
 
     def __len__(self):
-        return len(self.hist_rewards)
+        return len(self.rewards)
 
     def __getitem__(self, idx):
-        return self.hist_features[idx], self.hist_rewards[idx]
+        return self.features[idx], self.rewards[idx]
 
-    def set_hists(self, hist_features, hist_rewards):
-        self.hist_features = hist_features
-        self.hist_rewards = hist_rewards
+    def set_(self, features_2d, rewards_2d):
+        self.features = features_2d
+        self.rewards = rewards_2d
 
     def add(self, features, reward):
-        self.hist_features = torch.cat((self.hist_features, features))
-        self.hist_rewards = torch.cat((self.hist_rewards, reward))
-
-    def update_validation_set(self, split_size=0.1):
-
-        return
+        self.features = torch.cat((self.features, features))
+        self.rewards = torch.cat((self.rewards, reward))
 
 
 class VariableNet(nn.Module):
@@ -90,21 +84,20 @@ class EarlyStopping:
         self.patience = patience
         self.min_loss = float("inf")
         self.count = 0
-        self.train_activ = None
-        self.val_activ = None
+        self.best_model = None
 
-    def __call__(self, cur_loss, train_activ, val_activ):
+    def __call__(self, cur_loss, model):
         # If no improvement
         if cur_loss >= self.min_loss:
             self.count += 1
-        else:  # Improvement, store activs
+        else:  # Improvement, store state dict
             self.count = 0
-            self.store(train_activ, val_activ)
+            self.store(model)
             self.min_loss = cur_loss
 
-    def store(self, train_activ, val_activ):
-        self.train_activ = train_activ.detach().clone()
-        self.val_activ = val_activ.detach().clone()
+    def store(self, model):
+        self.best_model = deepcopy(model)
+        self.best_model.zero_grad()
 
     @property
     def early_stop(self):
@@ -156,13 +149,13 @@ class DENeuralTSDiag:
         self.decay = decay
 
         self.loss_func = nn.MSELoss()
-        self.dataset = ReplayDataset()
+        self.train_dataset = ReplayDataset()
+        self.val_dataset = ReplayDataset()
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
         self.optimizer_class = optimizers[optim_string]
 
     def compute_activation_and_grad(self, vec):
-
         self.net.zero_grad()
         mu = self.net(vec)
         mu.backward(retain_graph=True)
@@ -190,11 +183,16 @@ class DENeuralTSDiag:
         return sample_r, g_list, mu.detach().item(), sigma.detach().item()
 
     def train(
-        self, n_epochs, lr=1e-2, batch_size=-1, generator=torch.Generator(device="cuda")
+        self,
+        n_epochs,
+        lr=1e-2,
+        batch_size=-1,
+        generator=torch.Generator(device="cuda"),
+        patience=5,
     ):
         # For full batch grad descent
         if batch_size == -1:
-            batch_size = len(self.dataset)
+            batch_size = len(self.train_dataset)
 
         # Setup
         self.len += 1
@@ -203,13 +201,15 @@ class DENeuralTSDiag:
             self.net.parameters(), lr=lr, weight_decay=weight_decay
         )
 
+        # Although we're giving the whole dataset, the class is made such that only training examples are used here
         loader = DataLoader(
-            self.dataset,
+            self.train_dataset,
             batch_size=batch_size,
             shuffle=True,
             generator=generator,
         )
 
+        early_stop = EarlyStopping(patience)
         # Train loop
         for _ in range(n_epochs):
             for X, y in loader:
@@ -219,8 +219,18 @@ class DENeuralTSDiag:
                 loss.backward()
                 optimizer.step()
 
+            val_loss = get_validation_loss(self.net, self.val_dataset, self.loss_func)
+
+            early_stop(val_loss, self.net)
+
+            if early_stop.early_stop:
+                break
+
         optimizer.zero_grad()
 
+        # Set the net to the best in validation we've seen
+        # Deep copy to ensure no remaining references to the early_stop object
+        self.net = deepcopy(early_stop.best_model)
         return loss.detach().item()
 
     def find_solution_in_vecs(self, vecs, thresh, n_sigmas):
@@ -278,3 +288,11 @@ class LenientDENeuralTSDiag(DENeuralTSDiag):
             )
         # torch.set_grad_enabled(False)
         return sample_r, g_list, mu.detach().item(), cb.item()
+
+
+def get_validation_loss(net, val_dataset, loss_fn):
+    X_val, y_val = val_dataset.features, val_dataset.rewards
+    with torch.no_grad():
+        pred = net(X_val)
+        loss = loss_fn(pred, y_val)
+    return loss
