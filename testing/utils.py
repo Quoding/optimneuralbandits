@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 import random
-from math import isnan
+from math import isnan, floor, ceil
 from typing import Type
 import logging
 import numpy as np
@@ -18,6 +18,32 @@ from scipy.stats.contingency import relative_risk
 device = torch.device("cuda")
 logging.basicConfig(level=logging.INFO)
 torch.set_default_tensor_type("torch.cuda.FloatTensor")
+
+
+def discretize_targets(targets, factor):
+    discrete_risks = torch.floor(targets * factor) / factor
+    discrete_risks = np.round(discrete_risks.cpu().numpy(), decimals=1)
+
+    return discrete_risks
+
+
+def build_histogram(targets, factor, bin_size):
+    # Determine the bin edges
+    min_bin = floor(min(targets) * factor) / factor
+    max_bin = ceil(max(targets) * factor) / factor
+    # Handles case where maximum is exactly on the edge of the last bin
+    if max(targets).item() == max_bin:
+        max_bin += bin_size
+
+    n_bins = round((max_bin - min_bin) / 0.1)  # Deal with poor precision in Python...
+    list_bin_edges = np.around(
+        [min_bin + (bin_size * i) for i in range(n_bins + 1)], 1
+    ).astype("float32")
+    bin_edges = torch.from_numpy(list_bin_edges)
+
+    # Build discretized distribution with histogram
+    hist = torch.histogram(targets.cpu(), bin_edges)
+    return hist, n_bins, list_bin_edges
 
 
 class PullPolicy(Policy):
@@ -345,6 +371,12 @@ def parse_args():
         action="store_true",
         help="Tells the agent to play the best arm which has an interesecting lower CI with the threshold",
     )
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=5,
+        help="Patience for early stopping during training",
+    )
     args = parser.parse_args()
     return args
 
@@ -408,7 +440,7 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     _, g_list = agent.compute_activation_and_grad(a_t)
     # print(best_vec)
     # print(a_t)
-    input()
+    # input()
     return a_t, idx, g_list
 
 
