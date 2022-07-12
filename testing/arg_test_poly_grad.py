@@ -6,7 +6,7 @@ import os
 import numpy as np
 import pandas as pd
 import torch
-
+from sklearn.model_selection import train_test_split
 from utils import *
 
 sys.path.append("..")
@@ -37,6 +37,7 @@ pop_optim_lr = args.pop_lr
 batch_size = args.batch_size
 n_sigmas = args.n_sigmas
 ci_thresh = args.ci_thresh
+patience = args.patience
 
 make_deterministic(seed)
 
@@ -81,12 +82,23 @@ agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lambda_=reg, styl
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
-agent.dataset.set_hists(vecs, rewards)
+X_train, X_val, y_train, y_val = train_test_split(
+    vecs.cpu(), rewards.cpu(), test_size=0.1, stratify=(rewards > thresh).cpu()
+)
+
+X_train, X_val, y_train, y_val = (
+    X_train.to(device),
+    X_val.to(device),
+    y_train.to(device),
+    y_val.to(device),
+)
+
+agent.train_dataset.set_(X_train, y_train)
+agent.val_dataset.set_(X_val, y_val)
 
 logging.info("Warming up...")
 #### WARMUP ####
-agent.train(n_epochs, lr=lr, batch_size=batch_size)
-
+agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience)
 
 #### GET METRICS POST WARMUP, PRE TRAINING ####
 jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
@@ -108,9 +120,9 @@ for i in range(n_trials):
     r_t = reward_fn(idx)[:, None]
     agent.U += best_member_grad * best_member_grad
 
-    agent.dataset.add(a_t, r_t)
+    agent.train_dataset.add(a_t, r_t)
 
-    loss = agent.train(n_epochs, lr)
+    loss = agent.train(n_epochs, lr, batch_size=batch_size, patience=patience)
 
     #### COMPUTE METRICS ####
     if (i + 1) % 100 == 0:
