@@ -25,7 +25,13 @@ device = torch.device("cuda")
 
 class Network(nn.Module):
     def __init__(
-        self, dim, n_hidden_layers, hidden_size=100, dropout_rate=None, batch_norm=False
+        self,
+        dim,
+        n_hidden_layers,
+        n_output=1,
+        hidden_size=100,
+        dropout_rate=None,
+        batch_norm=False,
     ):
         super().__init__()
         layers = nn.ModuleList()
@@ -45,7 +51,7 @@ class Network(nn.Module):
                 layers.append(nn.Dropout(dropout_rate))
             layers.append(nn.ReLU())
 
-        layers.append(nn.Linear(hidden_size, 1))
+        layers.append(nn.Linear(hidden_size, n_output))
 
         self.model = nn.Sequential(*layers)
 
@@ -286,13 +292,30 @@ def load_dataset(dataset_path):
     return features, risks, patterns, n_obs, n_dim
 
 
-def setup_data(dataset, batch_size, n_obs, reweight=None, classif_thresh=None):
+def setup_data(
+    dataset, batch_size, n_obs, reweight=None, classif_thresh=None, val=None
+):
     combis, risks, _, _, n_dim = load_dataset(dataset)
 
     combis, risks = (
         torch.tensor(combis.values).float(),
         torch.tensor(risks.values).unsqueeze(1).float(),
     )
+
+    # Shuffle the data
+    perm_idx = torch.randperm(len(risks))
+    combis = combis[perm_idx]
+    risks = risks[perm_idx]
+
+    # TODO WIP
+    # if val == "extrema":
+    #     min_idx = torch.argmin(risks)
+    #     max_idx = torch.argmax(risks)
+    #     ids = torch.tensor([min_idx, max_idx])
+    #     X_val = features[ids]
+    #     y_val = risks[ids]
+    #     min_of_indexes = min(min_idx, max_idx)
+    #     max_of_indexes = max(min_idx, max_idx)
 
     X_train, y_train = combis[:n_obs], risks[:n_obs]
     X_val, y_val = combis[n_obs:], risks[n_obs:]
@@ -391,27 +414,35 @@ def save_metrics(array, path):
     np.save(path, array)
 
 
-class QuantileLoss(_Loss):
-    def __init__(self, quantile):
+class QuantileLoss(nn.Module):
+    def __init__(self, quantiles):
         super().__init__()
-        self.quantile = quantile
+        self.quantiles = quantiles
 
     def forward(self, preds, target):
         assert not target.requires_grad
         assert preds.size(0) == target.size(0)
+        losses = []
         errors = target - preds
-        loss = torch.max((self.quantile - 1) * errors, self.quantile * errors)
-        loss = torch.mean(loss)
+
+        for i, q in enumerate(self.quantiles):
+            losses.append(
+                torch.max((q - 1) * errors[:, i], q * errors[:, i]).unsqueeze(1)
+            )
+        loss = torch.mean(torch.sum(torch.cat(losses, dim=1), dim=1))
+
+        errors = target - preds
+
         return loss
 
 
-def get_loss(loss_name, quantile=0.9):
+def get_loss(loss_name, quantiles=[0.5, 0.7]):
     if loss_name == "mse" or loss_name == "rmse":
         return nn.MSELoss()
     elif loss_name == "l1":
         return nn.L1Loss()
     elif loss_name == "quantile":
-        return QuantileLoss(quantile)
+        return QuantileLoss(quantiles)
 
 
 def get_layers(n_dim, embed_dim):
