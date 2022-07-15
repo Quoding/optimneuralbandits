@@ -38,6 +38,9 @@ plt.rcParams["font.family"] = "serif"
 plt.style.use("ggplot")
 title_font_size = "10"
 
+# %load_ext autoreload
+# %autoreload 2
+
 
 # %% [markdown]
 # # Globals
@@ -88,7 +91,7 @@ param_values = {
     "classif_thresh": [None],
     "batch_norm": [True],
     "patience": [5, 10],
-    "validation": [None],
+    "validation": ["extrema"],
 }
 
 configs = [dict(zip(param_values, v)) for v in product(*param_values.values())]
@@ -175,9 +178,11 @@ def run_config(config, exp_dir="test_graal"):
         n_outputs = len(quantiles)
 
     train_losses = []
+    test_losses = []
     val_losses = []
     train_r2s = []
     val_r2s = []
+    test_r2s = []
     if exp_dir == None:
         exp_dir == ""
     l = []
@@ -192,16 +197,24 @@ def run_config(config, exp_dir="test_graal"):
         writer = SummaryWriter(log_dir=logdir)
         min_val_loss = float("inf")
         min_train_loss = float("inf")
+        val_activ_min_loss = None
+        train_activ_min_loss = None
+        test_activ_min_loss = None
+        val_activ_mintrain_loss = None
+        train_activ_mintrain_loss = None
+        test_activ_mintrain_loss = None
 
         seed_train_losses = [np.nan] * n_epochs
         seed_val_losses = [np.nan] * n_epochs
+        seed_test_losses = [np.nan] * n_epochs
         seed_train_r2s = [np.nan] * n_epochs
         seed_val_r2s = [np.nan] * n_epochs
+        seed_test_r2s = [np.nan] * n_epochs
         early_stopping = EarlyStoppingActiv(patience=patience)
 
         make_deterministic(seed=seed)
 
-        trainloader, training_data, X_val, y_val, n_dim = setup_data(
+        trainloader, training_data, X_val, y_val, n_dim, X_test, y_test = setup_data(
             dataset, batch_size, n_obs, reweight, classif_thresh, validation
         )
 
@@ -235,18 +248,24 @@ def run_config(config, exp_dir="test_graal"):
             ### EVAL ###
             with torch.no_grad():
                 # Compute losses
-                val_activ = net(X_val)
-                val_loss = criterion(val_activ, y_val)
-
-                train_activ = net(X_train)
-                train_loss = criterion(train_activ, y_train)
-
-                if loss_info[0] == "rmse":
-                    train_loss = torch.sqrt(train_loss)
-                    val_loss = torch.sqrt(val_loss)
-
-                val_loss = val_loss.item()
-                train_loss = train_loss.item()
+                (
+                    train_activ,
+                    train_loss,
+                    val_activ,
+                    val_loss,
+                    test_activ,
+                    test_loss,
+                ) = get_losses_and_activ(
+                    net,
+                    criterion,
+                    loss_info,
+                    X_train,
+                    y_train,
+                    X_val,
+                    y_val,
+                    X_test,
+                    y_test,
+                )
 
                 # Get R2 metric
                 train_r2 = r2_score(
@@ -267,70 +286,88 @@ def run_config(config, exp_dir="test_graal"):
                 writer.add_scalar("R2/train", train_r2, e)
                 writer.add_scalar("R2/val", val_r2, e)
 
+                if X_test is not None and y_test is not None:
+                    test_r2 = r2_score(
+                        y_test.cpu().numpy(), test_activ.cpu().numpy()[:, pred_idx]
+                    )
+                    seed_test_losses[e] = test_loss
+                    seed_test_r2s[e] = test_r2
+                    writer.add_scalar("Loss/test", test_loss, e)
+                    writer.add_scalar("R2/test", test_r2, e)
+
                 # Update LR scheduler
                 if type(lr) == str:
                     sched.step(val_loss)
 
-                # Update minimums
-                if val_loss < min_val_loss:
-                    val_activ_min_loss = (
-                        val_activ.detach().clone().cpu().numpy()[:, pred_idx]
-                    )
-                    train_activ_min_loss = (
-                        train_activ.detach().clone().cpu().numpy()[:, pred_idx]
-                    )
-                    min_val_loss = val_loss
-                if train_loss < min_train_loss:
-                    val_activ_mintrain_loss = (
-                        val_activ.detach().clone().cpu().numpy()[:, pred_idx]
-                    )
-                    train_activ_mintrain_loss = (
-                        train_activ.detach().clone().cpu().numpy()
-                    )[:, pred_idx]
-                    min_train_loss = train_loss
-
+                (
+                    train_activ_min_loss,
+                    val_activ_min_loss,
+                    test_activ_min_loss,
+                    min_val_loss,
+                    train_activ_mintrain_loss,
+                    val_activ_mintrain_loss,
+                    test_activ_mintrain_loss,
+                    min_train_loss,
+                ) = update_minimums(
+                    train_loss,
+                    min_train_loss,
+                    train_activ,
+                    val_loss,
+                    min_val_loss,
+                    val_activ,
+                    test_loss,
+                    test_activ,
+                    pred_idx,
+                    val_activ_min_loss,
+                    train_activ_min_loss,
+                    test_activ_min_loss,
+                    val_activ_mintrain_loss,
+                    train_activ_mintrain_loss,
+                    test_activ_mintrain_loss,
+                )
             ### VERIFY EARLY STOP ###
             # Is weird rn but basically we just want to record the first early stop activations, but since we also want the lowest validation error's activation we can't break out yet
             if not early_stopping.early_stop:
-                early_stopping(val_loss, train_activ, val_activ)
+                early_stopping(val_loss, train_activ, val_activ, test_activ)
                 if early_stopping.early_stop:
                     ### PLOT EARLY STOP REPRESENTATION ###
-                    train_activ_graph_early_stop = (
-                        early_stopping.train_activ.cpu().numpy()
-                    )[:, pred_idx]
-                    val_activ_graph_early_stop = early_stopping.val_activ.cpu().numpy()[
-                        :, pred_idx
-                    ]
-
                     fig_pgt_es = plot_pred_vs_gt(
-                        y_train.cpu().numpy(),
-                        train_activ_graph_early_stop,
-                        y_val.cpu().numpy(),
-                        val_activ_graph_early_stop,
+                        y_train,
+                        early_stopping.train_activ,
+                        y_val,
+                        early_stopping.val_activ,
+                        y_test,
+                        early_stopping.test_activ,
                         title="Prédiction par rapport à la vérité (Early Stop)",
+                        pred_idx=pred_idx,
                     )
-
                     writer.add_figure("pred_vs_gt_early_stop", fig_pgt_es)
                     writer.flush()
 
         ### PLOT PRED VS TRUE FOR THIS SEED  (min val loss) ###
         fig_pgt_minval = plot_pred_vs_gt(
-            y_train.cpu().numpy(),
+            y_train,
             train_activ_min_loss,
-            y_val.cpu().numpy(),
+            y_val,
             val_activ_min_loss,
+            y_test,
+            test_activ_min_loss,
             title="Prédiction par rapport à la vérité (min val)",
+            pred_idx=pred_idx,
         )
 
         writer.add_figure("pred_vs_gt_minval", fig_pgt_minval)
 
         ### PLOT PRED VS TRUE FOR THIS SEED  (min train loss) ###
         fig_pgt_mintrain = plot_pred_vs_gt(
-            y_train.cpu().numpy(),
+            y_train,
             train_activ_mintrain_loss,
-            y_val.cpu().numpy(),
+            y_val,
             val_activ_mintrain_loss,
+            y_test,
+            test_activ_mintrain_loss,
             title="Prédiction par rapport à la vérité (min train)",
+            pred_idx=pred_idx,
         )
 
         writer.add_figure("pred_vs_gt_mintrain", fig_pgt_mintrain)
@@ -340,8 +377,10 @@ def run_config(config, exp_dir="test_graal"):
 
         train_losses.append(seed_train_losses)
         val_losses.append(seed_val_losses)
+        test_losses.append(seed_test_losses)
         train_r2s.append(seed_train_r2s)
         val_r2s.append(seed_val_r2s)
+        test_r2s.append(seed_test_r2s)
     ### PLOT AGGREGATE DATA FOR ALL SEEDS ###
     # logdir = f"runs/{exp_dir}/aggregate"
     # writer = SummaryWriter(log_dir=logdir)
@@ -349,11 +388,12 @@ def run_config(config, exp_dir="test_graal"):
     # ### PLOTS ###
     # train_losses = np.array(train_losses)
     # val_losses = np.array(val_losses)
-    # fig_loss = plot_losses(n_epochs, train_losses, val_losses)
+    # test_losses = np.array(test_losses)
+    # fig_loss =  plot_metric(n_epochs, train_losses, val_losses, test_losses)
 
     # train_r2s = np.array(train_r2s)
     # val_r2s = np.array(val_r2s)
-    # fig_r2 = plot_losses(n_epochs, train_r2s, val_r2s)
+    # fig_r2 = plot_metric(n_epochs, train_r2s, val_r2s, test_r2s)
 
     # writer.add_figure("losses", fig_loss)
     # writer.add_figure("r2s", fig_r2)
@@ -364,14 +404,16 @@ def run_config(config, exp_dir="test_graal"):
 
     save_metrics(train_losses, f"metrics/{exp_dir}/train_losses")
     save_metrics(val_losses, f"metrics/{exp_dir}/val_losses")
+    save_metrics(test_losses, f"metrics/{exp_dir}/test_losses")
     save_metrics(train_r2s, f"metrics/{exp_dir}/train_r2s")
     save_metrics(val_r2s, f"metrics/{exp_dir}/val_r2s")
+    save_metrics(test_r2s, f"metrics/{exp_dir}/test_r2s")
 
     # print(f"saved at runs/{exp_dir}")
 
 
 # %%
-with Pool(4) as p:
-    p.map(run_config, configs)
+for config in configs[:1]:
+    run_config(config)
 
 # %%

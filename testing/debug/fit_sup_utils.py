@@ -250,19 +250,22 @@ class EarlyStoppingActiv:
         self.count = 0
         self.train_activ = None
         self.val_activ = None
+        self.test_activ = None
 
-    def __call__(self, cur_loss, train_activ, val_activ):
+    def __call__(self, cur_loss, train_activ, val_activ, test_activ):
         # If no improvement
         if cur_loss >= self.min_loss:
             self.count += 1
         else:  # Improvement, store activs
             self.count = 0
-            self.store(train_activ, val_activ)
+            self.store(train_activ, val_activ, test_activ)
             self.min_loss = cur_loss
 
-    def store(self, train_activ, val_activ):
-        self.train_activ = train_activ.detach().clone()
-        self.val_activ = val_activ.detach().clone()
+    def store(self, train_activ, val_activ, test_activ):
+        self.train_activ = train_activ.detach().clone().cpu().numpy()
+        self.val_activ = val_activ.detach().clone().cpu().numpy()
+        if test_activ is not None:
+            self.test_activ = test_activ.detach().clone().cpu().numpy()
 
     @property
     def early_stop(self):
@@ -307,18 +310,28 @@ def setup_data(
     combis = combis[perm_idx]
     risks = risks[perm_idx]
 
-    # TODO WIP
-    # if val == "extrema":
-    #     min_idx = torch.argmin(risks)
-    #     max_idx = torch.argmax(risks)
-    #     ids = torch.tensor([min_idx, max_idx])
-    #     X_val = features[ids]
-    #     y_val = risks[ids]
-    #     min_of_indexes = min(min_idx, max_idx)
-    #     max_of_indexes = max(min_idx, max_idx)
+    if val == "extrema":
+        min_idx = torch.argmin(risks)
+        max_idx = torch.argmax(risks)
+        ids = torch.tensor([min_idx, max_idx])
+        X_val = combis[ids]
+        y_val = risks[ids]
+        min_of_indexes = min(min_idx, max_idx)
+        max_of_indexes = max(min_idx, max_idx)
+
+        # Remove used indexes from the observations
+        combis = torch.cat((combis[:max_of_indexes], combis[max_of_indexes + 1 :]))
+        combis = torch.cat((combis[:min_of_indexes], combis[min_of_indexes + 1 :]))
+        risks = torch.cat((risks[:max_of_indexes], risks[max_of_indexes + 1 :]))
+        risks = torch.cat((risks[:min_of_indexes], risks[min_of_indexes + 1 :]))
+
+        # Create a test set so we can see how good the model actually is different stages
+        X_test, y_test = combis[n_obs:], risks[n_obs:]
+    else:
+        X_val, y_val = combis[n_obs:], risks[n_obs:]
+        X_test, y_test = None, None
 
     X_train, y_train = combis[:n_obs], risks[:n_obs]
-    X_val, y_val = combis[n_obs:], risks[n_obs:]
 
     if classif_thresh is not None:
         y_train = (y_train > classif_thresh).float()
@@ -326,7 +339,6 @@ def setup_data(
 
     training_data = CombiDataset(X_train, y_train, classif_thresh)
     if reweight is not None:
-        print("Using label distribution smoothing")
         w = training_data.get_weights(reweight=reweight)
         sampler = WeightedRandomSampler(w, num_samples=n_obs)
         trainloader = DataLoader(
@@ -344,10 +356,10 @@ def setup_data(
             generator=torch.Generator(device="cuda"),
         )
 
-    return trainloader, training_data, X_val, y_val, n_dim
+    return trainloader, training_data, X_val, y_val, n_dim, X_test, y_test
 
 
-def plot_losses(n_epochs, train_losses, val_losses):
+def plot_metric(n_epochs, train_losses, val_losses, test_losses=None):
     fig = plt.figure()
     x = list(range(n_epochs))
     train_nanmean = np.nanmean(train_losses, axis=0)
@@ -375,6 +387,18 @@ def plot_losses(n_epochs, train_losses, val_losses):
         color="tab:orange",
     )
 
+    # plot test loss
+    if test_losses is not None:
+        test_nanmean = np.nanmean(test_losses, axis=0)
+        test_nanstd = np.nanstd(test_losses, axis=0)
+        plt.plot(x, test_nanmean, label="Test", color="tab:green")
+        plt.fill_between(
+            x,
+            test_nanmean - test_nanstd,
+            test_nanmean + test_nanstd,
+            alpha=0.3,
+            color="tab:green",
+        )
     plt.title("Pertes selon le nombre d'époques")
     plt.xlabel("Époque")
     plt.ylabel("Perte")
@@ -387,7 +411,9 @@ def plot_losses(n_epochs, train_losses, val_losses):
     return fig
 
 
-def plot_pred_vs_gt(train_true, train_pred, val_true, val_pred, title):
+def plot_pred_vs_gt(
+    train_true, train_pred, val_true, val_pred, test_true, test_pred, title, pred_idx
+):
     fig = plt.figure()
     plt.title(title)
     plt.xlabel("Vérité")
@@ -396,10 +422,34 @@ def plot_pred_vs_gt(train_true, train_pred, val_true, val_pred, title):
     xlim = 3.5
     plt.ylim(0, ylim)
     plt.xlim(0, xlim)
-    plt.scatter(val_true, val_pred, alpha=0.1, color="tab:orange", label="Validation")
+    val_alpha = 0.1
+    # If we have a test set (basically, if we have a small validation set), plot it
+    if test_true is not None and test_pred is not None:
+        plt.scatter(
+            test_true.cpu().numpy(),
+            test_pred[:, pred_idx],
+            alpha=0.1,
+            color="tab:green",
+            label="Test",
+        )
+        # Set alpha of small validation set to be more visible
+        val_alpha = 1
+
     plt.scatter(
-        train_true, train_pred, alpha=0.1, color="tab:blue", label="Entrainement"
+        val_true.cpu().numpy(),
+        val_pred[:, pred_idx],
+        alpha=val_alpha,
+        color="tab:orange",
+        label="Validation",
     )
+    plt.scatter(
+        train_true.cpu().numpy(),
+        train_pred[:, pred_idx],
+        alpha=0.1,
+        color="tab:blue",
+        label="Entrainement",
+    )
+
     plt.plot(
         [0, xlim], [0, ylim], color="black", linestyle="dashed", label="Perfection"
     )
@@ -431,8 +481,6 @@ class QuantileLoss(nn.Module):
             )
         loss = torch.mean(torch.sum(torch.cat(losses, dim=1), dim=1))
 
-        errors = target - preds
-
         return loss
 
 
@@ -454,3 +502,73 @@ def get_layers(n_dim, embed_dim):
         d = 1 << (d).bit_length()
     layers.reverse()
     return layers
+
+
+def get_losses_and_activ(
+    net, criterion, loss_info, X_train, y_train, X_val, y_val, X_test, y_test
+):
+    val_activ = net(X_val)
+    val_loss = criterion(val_activ, y_val)
+
+    train_activ = net(X_train)
+    train_loss = criterion(train_activ, y_train)
+
+    if loss_info[0] == "rmse":
+        train_loss = torch.sqrt(train_loss)
+        val_loss = torch.sqrt(val_loss)
+
+    val_loss = val_loss.item()
+    train_loss = train_loss.item()
+
+    if X_test is not None and y_test is not None:
+        test_activ = net(X_test)
+        test_loss = criterion(test_activ, y_test)
+        if loss_info[0] == "rmse":
+            test_loss = torch.sqrt(test_loss)
+        test_loss = test_loss.item()
+    else:
+        test_activ, test_loss = None, None
+
+    return train_activ, train_loss, val_activ, val_loss, test_activ, test_loss
+
+
+def update_minimums(
+    train_loss,
+    min_train_loss,
+    train_activ,
+    val_loss,
+    min_val_loss,
+    val_activ,
+    test_loss,
+    test_activ,
+    pred_idx,
+    val_activ_min_loss,
+    train_activ_min_loss,
+    test_activ_min_loss,
+    val_activ_mintrain_loss,
+    train_activ_mintrain_loss,
+    test_activ_mintrain_loss,
+):
+    # Update minimums
+    if val_loss < min_val_loss:
+        val_activ_min_loss = val_activ.detach().clone().cpu().numpy()
+        train_activ_min_loss = train_activ.detach().clone().cpu().numpy()
+        min_val_loss = val_loss
+        if test_loss is not None and test_activ is not None:
+            test_activ_min_loss = test_activ.detach().clone().cpu().numpy()
+    if train_loss < min_train_loss:
+        val_activ_mintrain_loss = val_activ.detach().clone().cpu().numpy()
+        train_activ_mintrain_loss = train_activ.detach().clone().cpu().numpy()
+        min_train_loss = train_loss
+        if test_loss is not None and test_activ is not None:
+            test_activ_mintrain_loss = test_activ.detach().clone().cpu().numpy()
+    return (
+        train_activ_min_loss,
+        val_activ_min_loss,
+        test_activ_min_loss,
+        min_val_loss,
+        train_activ_mintrain_loss,
+        val_activ_mintrain_loss,
+        test_activ_mintrain_loss,
+        min_train_loss,
+    )
