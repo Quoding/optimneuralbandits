@@ -311,6 +311,7 @@ def setup_data(
     risks = risks[perm_idx]
 
     if val == "extrema":
+        # Use extrema for validation set (min and max)
         min_idx = torch.argmin(risks)
         max_idx = torch.argmax(risks)
         ids = torch.tensor([min_idx, max_idx])
@@ -324,6 +325,37 @@ def setup_data(
         combis = torch.cat((combis[:min_of_indexes], combis[min_of_indexes + 1 :]))
         risks = torch.cat((risks[:max_of_indexes], risks[max_of_indexes + 1 :]))
         risks = torch.cat((risks[:min_of_indexes], risks[min_of_indexes + 1 :]))
+
+        # Create a test set so we can see how good the model actually is different stages
+        X_test, y_test = combis[n_obs:], risks[n_obs:]
+    elif val == "bins":
+        # Use bins for validation set, so we have a wide spread
+        bin_size = 0.1
+        min_range = 0
+        max_range = 4
+        bins_left_edge = [
+            round(min_range + (i * bin_size), 1)
+            for i in range(int(max_range / bin_size) + 1)
+        ]
+        X_val = []
+        y_val = []
+        # TODO if this works well, find a way to track each bin's observation for bandit algo
+        # Put one observation per bin
+        for i in range(len(bins_left_edge) - 1):
+            lower_bound = bins_left_edge[i]
+            upper_bound = bins_left_edge[i + 1]
+            bigger_than = risks >= lower_bound
+            smaller_than = risks < upper_bound
+            inbound = torch.cat((bigger_than, smaller_than), dim=1).all(dim=1)
+            idx = torch.where(inbound)[0]
+            if len(idx) > 0:
+                idx = idx[0]
+                X_val.append(combis[idx])
+                y_val.append(risks[idx])
+                combis = torch.cat((combis[:idx], combis[idx + 1 :]))
+                risks = torch.cat((risks[:idx], risks[idx + 1 :]))
+        X_val = torch.stack(X_val)
+        y_val = torch.stack(y_val)
 
         # Create a test set so we can see how good the model actually is different stages
         X_test, y_test = combis[n_obs:], risks[n_obs:]
@@ -423,6 +455,7 @@ def plot_pred_vs_gt(
     plt.ylim(0, ylim)
     plt.xlim(0, xlim)
     val_alpha = 0.1
+    z_order = 1
     # If we have a test set (basically, if we have a small validation set), plot it
     if test_true is not None and test_pred is not None:
         plt.scatter(
@@ -434,6 +467,7 @@ def plot_pred_vs_gt(
         )
         # Set alpha of small validation set to be more visible
         val_alpha = 1
+        z_order = 2
 
     plt.scatter(
         val_true.cpu().numpy(),
@@ -441,6 +475,7 @@ def plot_pred_vs_gt(
         alpha=val_alpha,
         color="tab:orange",
         label="Validation",
+        zorder=z_order,
     )
     plt.scatter(
         train_true.cpu().numpy(),
