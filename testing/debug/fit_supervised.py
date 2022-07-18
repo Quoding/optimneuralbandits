@@ -74,24 +74,24 @@ device = torch.device("cuda")
 
 param_values = {
     "dataset": [
-        # "50_rx_100000_combis_4_patterns_3",
-        # "100_rx_100000_combis_10_patterns_35",
+        "50_rx_100000_combis_4_patterns_3",
+        "100_rx_100000_combis_10_patterns_35",
         "1000_rx_100000_combis_10_patterns_25",
     ],
     "width": [128],
     "hidden": [3],
-    "n_obs": [20000],
+    "n_obs": [10000, 20000],
     "decay": [0],
-    "lr": [0.001],
+    "lr": [0.001, 0.01, "plateau"],
     "custom_layers": [None],
     "reweight": ["sqrt_inv"],
     "batch_size": [32],
     "dropout_rate": [None],
-    "loss": [["quantile", [0.5, 0.7]]],
+    "loss": [["mse"], ["quantile", [0.3, 0.5, 0.7]], ["quantile", [0.5, 0.7]]],
     "classif_thresh": [None],
     "batch_norm": [True],
     "patience": [5, 10],
-    "validation": ["extrema"],
+    "validation": ["bins"],
 }
 
 configs = [dict(zip(param_values, v)) for v in product(*param_values.values())]
@@ -116,28 +116,33 @@ print(len(configs))
 # * Label dist. smoothing, but seems to affect validation perf for the "common" cluster (not outlier)
 # * Quantile loss seems to help over estimating values properly when using a quantile at 0.75 (i.e. low risk cluster is overestimated to a lesser extent than high risk cluster, which could be good for the bandit algorithm), HOWEVER, fitting a quantile that isn't 50 feels like it could mess up with NeuralTS (since we're not predicting a mean anymore, we're predicting a quantile, and the output of the NN usually goes into a Normal distribution as the mean param)
 # * Label dist smoothing with a bigger batch size seems to help
+# * More data. You need to have at least a couple of high risk observations in order to get a good idea of what makes a high risk combination
+# * for 1000 rx, small batches, sqrt_inv LDS, smaller models seems to have less bias in validation
+# * Low dim, MSE is sufficient, high dim, quantile seems better in early
+# * 3 layers of 128 width seem to be sufficient to overfit in training
+# * lr of 0.001 seem to help that overfitting, nice, lr of 0.01 seems to fail overfitting in some cases (dataset 100 and 50)
+# * mse is better than rmse
+# * If doing LDS, sqrt_inv is better than just True
+# * Extrema validation set seems to work well with low dimension data
 
 # %% [markdown]
 # ### What does not work
 #
 # * l1 loss
 # * High LR (0.01) seems to lead to high bias in validation
-
-# %% [markdown]
-# ### What does work
-# * 3 layers of 128 width seem to be sufficient to overfit in training
-# * lr of 0.001 seem to help that overfitting, nice, lr of 0.01 seems to fail overfitting in some cases (dataset 100 and 50)
-# * mse is better than rmse
-# * If doing LDS, sqrt_inv is better than just True
-# * for 1000 rx, small batches, sqrt_inv LDS, smaller models seems to have less bias in validation
+# * Low observation counts
+# * Embedding combinations with an AE
+# * Adaptive LR with high start LR (the LR goes down too fast too soon and underfits completely)
+# * High batch size tends to smoothen out the less populated clusters (high risk in this case, which contains important information)
 
 # %% [markdown]
 # ### To try
-# * ~~Very simple network with LDS (like one that can hardly overfit)~~
+# * ~~Very simple network with LDS (like one that can hardly overfit)~~ That alone doesnt work that well
 # * Transform regression into a classification with the new knowledge (how to interpret CIs then ?)
-# * ~~High batch size with sqrt_inv LDS and lower LR~~
-# * ~~Adaptive LR (Plateau)~~
-# * ~~Embed combination vectors. Each RX is a word, each combination of Rx is like a sentence. Embedding should pick up a relationship between the Rxs~~
+# * ~~High batch size with sqrt_inv LDS and lower LR~~ Seems to work alright, but tends to smoothen out outliers because of big batches
+# * ~~Adaptive LR (Plateau)~~ Does not always work well, but seems sound to try in general
+# * ~~Embed combination vectors. Each RX is a word, each combination of Rx is like a sentence. Embedding should pick up a relationship between the Rxs~~ Does not work well
+# * ~~50 rx and 100 rx with less than 10000 observations for a good architecture~~ Does not work well
 
 # %% [markdown]
 # ### Goal
@@ -150,7 +155,7 @@ n_epochs = 100
 seeds = [0]
 
 # %%
-def run_config(config, exp_dir="test_graal"):
+def run_config(config, exp_dir="test_bins"):
     n_layers = config["hidden"]
     width = config["width"]
     n_obs = config["n_obs"]
@@ -413,7 +418,10 @@ def run_config(config, exp_dir="test_graal"):
 
 
 # %%
-for config in configs[:1]:
-    run_config(config)
+# for config in configs[:1]:
+#     run_config(config)
+
+with Pool(4) as p:
+    p.map(run_config, configs)
 
 # %%
