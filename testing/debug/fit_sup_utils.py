@@ -339,6 +339,7 @@ def setup_data(
         ]
         X_val = []
         y_val = []
+        indices = []
         # TODO if this works well, find a way to track each bin's observation for bandit algo
         # Put one observation per bin
         for i in range(len(bins_left_edge) - 1):
@@ -346,16 +347,18 @@ def setup_data(
             upper_bound = bins_left_edge[i + 1]
             bigger_than = risks >= lower_bound
             smaller_than = risks < upper_bound
-            inbound = torch.cat((bigger_than, smaller_than), dim=1).all(dim=1)
-            idx = torch.where(inbound)[0]
+            in_bounds = torch.cat((bigger_than, smaller_than), dim=1).all(dim=1)
+            idx = torch.where(in_bounds)[0]
             if len(idx) > 0:
-                idx = idx[0]
-                X_val.append(combis[idx])
-                y_val.append(risks[idx])
-                combis = torch.cat((combis[:idx], combis[idx + 1 :]))
-                risks = torch.cat((risks[:idx], risks[idx + 1 :]))
-        X_val = torch.stack(X_val)
-        y_val = torch.stack(y_val)
+                indices.append(idx[0].item())
+
+        mask = torch.ones(len(risks)).bool()
+        mask[indices] = False
+
+        X_val = combis[indices]
+        y_val = risks[indices]
+        combis = combis[mask]
+        risks = risks[mask]
 
         # Create a test set so we can see how good the model actually is different stages
         X_test, y_test = combis[n_obs:], risks[n_obs:]
