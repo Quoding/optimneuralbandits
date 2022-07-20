@@ -42,6 +42,7 @@ ci_thresh = args.ci_thresh
 patience = args.patience
 valtype = args.valtype
 batch_norm = not args.nobatchnorm
+use_lds = not args.nolds
 
 make_deterministic(seed)
 
@@ -86,7 +87,12 @@ n_combis_in_sol = len(combis_in_sol)
 logging.info(f"There are {n_combis_in_sol} combinations in the solution set")
 
 agent = DENeuralTSDiag(
-    net, optim_string, nu=exploration_mult, lambda_=reg, style=style, valtype=valtype
+    net,
+    optim_string,
+    nu=exploration_mult,
+    lambda_=reg,
+    style=style,
+    valtype=valtype,
 )
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
@@ -98,7 +104,7 @@ agent.val_dataset.set_(X_val, y_val)
 
 logging.info("Warming up...")
 #### WARMUP ####
-agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience)
+agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, use_lds=use_lds)
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
 jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
@@ -124,7 +130,9 @@ for i in range(n_trials):
     a_train, r_train = agent.val_dataset.update(a_t, r_t)
     agent.train_dataset.add(a_train, r_train)
 
-    loss = agent.train(n_epochs, lr, batch_size=batch_size, patience=patience)
+    agent.train(
+        n_epochs, lr=lr, batch_size=batch_size, patience=patience, use_lds=use_lds
+    )
     #### COMPUTE METRICS ####
     if (i + 1) % 100 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
