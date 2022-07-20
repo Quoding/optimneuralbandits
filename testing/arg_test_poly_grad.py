@@ -38,6 +38,7 @@ batch_size = args.batch_size
 n_sigmas = args.n_sigmas
 ci_thresh = args.ci_thresh
 patience = args.patience
+valtype = args.valtype
 
 make_deterministic(seed)
 
@@ -78,20 +79,13 @@ n_combis_in_sol = len(combis_in_sol)
 
 logging.info(f"There are {n_combis_in_sol} combinations in the solution set")
 
-agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lambda_=reg, style=style)
+agent = DENeuralTSDiag(
+    net, optim_string, nu=exploration_mult, lambda_=reg, style=style, valtype=valtype
+)
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
-X_train, X_val, y_train, y_val = train_test_split(
-    vecs.cpu(), rewards.cpu(), test_size=0.1, stratify=(rewards > thresh).cpu()
-)
-
-X_train, X_val, y_train, y_val = (
-    X_train.to(device),
-    X_val.to(device),
-    y_train.to(device),
-    y_val.to(device),
-)
+X_train, y_train, X_val, y_val = get_data_splits(vecs, rewards, val=valtype)
 
 agent.train_dataset.set_(X_train, y_train)
 agent.val_dataset.set_(X_val, y_val)
@@ -101,15 +95,15 @@ logging.info("Warming up...")
 agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience)
 
 #### GET METRICS POST WARMUP, PRE TRAINING ####
-jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-    agent, combis, thresh, pat_vecs, true_sol, n_sigmas
-)
-logging.info(
-    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
-)
-jaccards.append(jaccard)
-ratio_apps.append(ratio_app)
-percent_found_pats.append(percent_found_pat)
+# jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
+#     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+# )
+# logging.info(
+#     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+# )
+# jaccards.append(jaccard)
+# ratio_apps.append(ratio_app)
+# percent_found_pats.append(percent_found_pat)
 logging.info("Warm up over. Starting training")
 
 #### TRAINING ####
@@ -120,7 +114,8 @@ for i in range(n_trials):
     r_t = reward_fn(idx)[:, None]
     agent.U += best_member_grad * best_member_grad
 
-    agent.train_dataset.add(a_t, r_t)
+    a_train, r_train = agent.val_dataset.update(a_t, r_t)
+    agent.train_dataset.add(a_train, r_train)
 
     loss = agent.train(n_epochs, lr, batch_size=batch_size, patience=patience)
 

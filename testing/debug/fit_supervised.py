@@ -51,54 +51,7 @@ device = torch.device("cuda")
 
 
 # %% [markdown]
-# # Generate configurations
-
-# %%
-# param_values = {
-#     "dataset": [
-#         "50_rx_100000_combis_4_patterns_3",
-#         "100_rx_100000_combis_10_patterns_35",
-#         "1000_rx_100000_combis_10_patterns_25",
-#     ],
-#     "width": [False],
-#     "hidden": [False],
-#     "n_obs": [20000],
-#     "decay": [0],
-#     "lr": [0.001],
-#     "custom_layers": [[512, 256, 128], [128, 64, 32], [64, 32]],
-#     "reweight": [None, True, "sqrt_inv"],
-#     "batch_size": [32],
-#     "dropout_rate" : [None],
-#     "loss": [["mse"], ["rmse"]]
-# }
-
-param_values = {
-    "dataset": [
-        "50_rx_100000_combis_4_patterns_3",
-        "100_rx_100000_combis_10_patterns_35",
-        "1000_rx_100000_combis_10_patterns_25",
-    ],
-    "width": [128],
-    "hidden": [3],
-    "n_obs": [10000, 20000],
-    "decay": [0],
-    "lr": [0.001, 0.01, "plateau"],
-    "custom_layers": [None],
-    "reweight": ["sqrt_inv"],
-    "batch_size": [32],
-    "dropout_rate": [None],
-    "loss": [["mse"], ["quantile", [0.3, 0.5, 0.7]], ["quantile", [0.5, 0.7]]],
-    "classif_thresh": [None],
-    "batch_norm": [True],
-    "patience": [5, 10],
-    "validation": ["bins"],
-}
-
-configs = [dict(zip(param_values, v)) for v in product(*param_values.values())]
-print(len(configs))
-
-# %% [markdown]
-# # Train
+# # Notes
 
 # %% [markdown]
 # ## What affects overfitting here ?
@@ -124,6 +77,8 @@ print(len(configs))
 # * mse is better than rmse
 # * If doing LDS, sqrt_inv is better than just True
 # * Extrema validation set seems to work well with low dimension data
+# * For low dim data: MSE seems equal or better than quantile in more situations (learning rate for example)
+# * Avoir un validation set pondere de maniere plus egale (ex. bins et extrema)
 
 # %% [markdown]
 # ### What does not work
@@ -136,6 +91,12 @@ print(len(configs))
 # * High batch size tends to smoothen out the less populated clusters (high risk in this case, which contains important information)
 
 # %% [markdown]
+# ### General observations
+# * Quantile loss seems to work better with LDS
+# * More data always helps. Also, the amount of data isn't a problem in our setting, the computation of the label is.
+# * The more dimensions we have, the less effective having a validation set seems to be. Possible explanation: having a training set which is representative of the validation set in some way gets harder the more dimensions we have, therefore, validation loss can hardly go down, so training stops early and cannot even learn a good representation.
+
+# %% [markdown]
 # ### To try
 # * ~~Very simple network with LDS (like one that can hardly overfit)~~ That alone doesnt work that well
 # * Transform regression into a classification with the new knowledge (how to interpret CIs then ?)
@@ -143,19 +104,52 @@ print(len(configs))
 # * ~~Adaptive LR (Plateau)~~ Does not always work well, but seems sound to try in general
 # * ~~Embed combination vectors. Each RX is a word, each combination of Rx is like a sentence. Embedding should pick up a relationship between the Rxs~~ Does not work well
 # * ~~50 rx and 100 rx with less than 10000 observations for a good architecture~~ Does not work well
+# * ~~Extrema with 0.001 decay~~
+# * ~~Early stop on r2 score instead of val loss~~
 
 # %% [markdown]
 # ### Goal
 # * Generalize in validation
 # * If unable to generalize in the conventional sense, at least make sure the "high risk" cluster is estimated over the "low risk" cluster
 
+# %% [markdown]
+# ### Good models
+# *  dataset=1000_rx_100000_combis_10_patterns_25/width=128/hidden=4/n_obs=40000/decay=0/lr=0.001/custom_layers=None/reweight=sqrt_inv/batch_size=32/dropout_rate=None/loss=['quantile', [0.3, 0.5, 0.7]]/classif_thresh=None/batch_norm=True/patience=25/validation=bins/seed=0
+# * dataset=100_rx_100000_combis_10_patterns_35/width=128/hidden=4/n_obs=30000/decay=0/lr=0.001/custom_layers=None/reweight=None/batch_size=32/dropout_rate=None/loss=\['mse'\]/classif_thresh=None/batch_norm=True/patience=10/validation=bins/seed=0
+
+# %% [markdown]
+# # Actual training
+
 # %%
 n_epochs = 100
 # seeds = list(range(25))
 seeds = [0]
+param_values = {
+    "dataset": [
+        # "50_rx_100000_combis_4_patterns_3",
+        "100_rx_100000_combis_10_patterns_35",
+        "1000_rx_100000_combis_10_patterns_25",
+    ],
+    "width": [128],
+    "hidden": [4],
+    "n_obs": [30000, 40000, 50000],
+    "decay": [0],
+    "lr": [0.001],
+    "custom_layers": [None],
+    "reweight": ["sqrt_inv", None],
+    "batch_size": [32],
+    "dropout_rate": [None],
+    "loss": [["mse"], ["quantile", [0.3, 0.5, 0.7]], ["quantile", [0.5, 0.7]]],
+    "classif_thresh": [None],
+    "batch_norm": [True],
+    "patience": [10, 25],
+    "validation": ["bins", "extrema"],
+}
+configs = [dict(zip(param_values, v)) for v in product(*param_values.values())]
+print(len(configs))
 
 # %%
-def run_config(config, exp_dir="test_bins"):
+def run_config(config, exp_dir="test_high_dim_more_data"):
     n_layers = config["hidden"]
     width = config["width"]
     n_obs = config["n_obs"]
@@ -343,7 +337,7 @@ def run_config(config, exp_dir="test_bins"):
                         early_stopping.val_activ,
                         y_test,
                         early_stopping.test_activ,
-                        title="Prédiction par rapport à la vérité (Early Stop)",
+                        title=f"Prédiction par rapport à la vérité (epoch {e})(Early Stop)",
                         pred_idx=pred_idx,
                     )
                     writer.add_figure("pred_vs_gt_early_stop", fig_pgt_es)

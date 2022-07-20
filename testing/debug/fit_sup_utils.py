@@ -139,7 +139,7 @@ class AE(nn.Module):
                 writer.add_scalar("Loss_ae/train", train_loss, e)
                 writer.add_scalar("Loss_ae/val", val_loss, e)
 
-            early_stopping(val_loss, train_activ, val_activ)
+            early_stopping(val_loss, train_activ, val_activ, None)
 
             if early_stopping.early_stop:
                 return
@@ -212,6 +212,7 @@ class CombiDataset(Dataset):
 
             # Get weights for dataset
             weight_bins = {list_bin_edges[i]: weights[0][0][i] for i in range(n_bins)}
+            # print(weight_bins)
             weights_per_obs = [weight_bins[risk] for risk in discrete_risks]
 
             # k = list(weight_bins.keys())
@@ -280,7 +281,6 @@ def gaussian_fn(size, std):
     return w
 
 
-# %%
 def load_dataset(dataset_path):
     dataset = pd.read_csv("../datasets/combinations/" + dataset_path + ".csv")
 
@@ -340,7 +340,6 @@ def setup_data(
         X_val = []
         y_val = []
         indices = []
-        # TODO if this works well, find a way to track each bin's observation for bandit algo
         # Put one observation per bin
         for i in range(len(bins_left_edge) - 1):
             lower_bound = bins_left_edge[i]
@@ -491,6 +490,11 @@ def plot_pred_vs_gt(
     plt.plot(
         [0, xlim], [0, ylim], color="black", linestyle="dashed", label="Perfection"
     )
+
+    plt.plot(
+        [1.1, 1.1], [0, 1.1], color="black", linestyle="dotted", label="Seuil de risque"
+    )
+    plt.plot([0, 1.1], [1.1, 1.1], color="black", linestyle="dotted")
     plt.legend()
 
     return fig
@@ -543,12 +547,21 @@ def get_layers(n_dim, embed_dim):
 
 
 def get_losses_and_activ(
-    net, criterion, loss_info, X_train, y_train, X_val, y_val, X_test, y_test
+    net,
+    criterion,
+    loss_info,
+    X_train,
+    y_train,
+    X_val,
+    y_val,
+    X_test,
+    y_test,
+    transform=nn.Identity(),
 ):
-    val_activ = net(X_val)
-    val_loss = criterion(val_activ, y_val)
+    val_activ = net(transform(X_val))
+    train_activ = net(transform(X_train))
 
-    train_activ = net(X_train)
+    val_loss = criterion(val_activ, y_val)
     train_loss = criterion(train_activ, y_train)
 
     if loss_info[0] == "rmse":
@@ -559,7 +572,7 @@ def get_losses_and_activ(
     train_loss = train_loss.item()
 
     if X_test is not None and y_test is not None:
-        test_activ = net(X_test)
+        test_activ = net(transform(X_test))
         test_loss = criterion(test_activ, y_test)
         if loss_info[0] == "rmse":
             test_loss = torch.sqrt(test_loss)
@@ -587,13 +600,15 @@ def update_minimums(
     train_activ_mintrain_loss,
     test_activ_mintrain_loss,
 ):
-    # Update minimums
+    # Record all activations on new minimum val loss
     if val_loss < min_val_loss:
         val_activ_min_loss = val_activ.detach().clone().cpu().numpy()
         train_activ_min_loss = train_activ.detach().clone().cpu().numpy()
         min_val_loss = val_loss
         if test_loss is not None and test_activ is not None:
             test_activ_min_loss = test_activ.detach().clone().cpu().numpy()
+
+    # Record all activations on new minimum train loss
     if train_loss < min_train_loss:
         val_activ_mintrain_loss = val_activ.detach().clone().cpu().numpy()
         train_activ_mintrain_loss = train_activ.detach().clone().cpu().numpy()

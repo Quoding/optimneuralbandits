@@ -39,9 +39,7 @@ class NetworkDropout(nn.Module):
 
 
 class ReplayDataset(Dataset):
-    def __init__(
-        self, features=None, rewards=None, val_features=None, val_rewards=None
-    ):
+    def __init__(self, features=None, rewards=None):
         self.features = features
         self.rewards = rewards
 
@@ -56,8 +54,82 @@ class ReplayDataset(Dataset):
         self.rewards = rewards_2d
 
     def add(self, features, reward):
+        if features is None or reward is None:
+            return
         self.features = torch.cat((self.features, features))
         self.rewards = torch.cat((self.rewards, reward))
+
+
+class ValidationReplayDataset(ReplayDataset):
+    def __init__(self, features=None, rewards=None, valtype=None):
+        self.features = None
+        self.rewards = None
+        self.valtype = valtype
+        self.bins_features = {}
+        self.bins_rewards = {}
+
+        if features is None or rewards is None:
+            pass
+        else:
+            self.set_(features, rewards)
+
+    def build_mapping(self):
+        for i in range(len(self.rewards)):
+            reward = self.rewards[i].unsqueeze(0)
+            vec = self.features[i].unsqueeze(0)
+
+            bin_ = int(reward * 10) / 10
+
+            self.bins_features[bin_] = vec
+            self.bins_rewards[bin_] = reward
+
+    def __len__(self):
+        return len(self.rewards)
+
+    def set_(self, features_2d, rewards_2d):
+        self.features = features_2d
+        self.rewards = rewards_2d
+
+        if self.valtype == "bins":
+            self.build_mapping()
+
+    def update(self, features, reward):
+        to_training = (features, reward)
+        if self.valtype == "extrema":
+            # If valtype is extrema, then the set is composed of only 2 observations, the min and max of rewards
+            # Assumes sorted tensors based on self.rewards
+            if reward < min(self.rewards):
+                to_training = (
+                    self.features[0].clone().unsqueeze(0),
+                    self.rewards[0].clone().unsqueeze(0),
+                )
+                self.features[0] = features[0]
+                self.rewards[0] = reward[0]
+            elif reward > max(self.rewards):
+                to_training = (
+                    self.features[1].clone().unsqueeze(0),
+                    self.rewards[1].clone().unsqueeze(0),
+                )
+                self.features[1] = features[0]
+                self.rewards[1] = reward[0]
+
+        elif self.valtype == "bins":
+            # TODO TEST THIS
+            # Update the bins with the new observation
+            new_obs_bin = int(reward * 10) / 10
+            # Send the observation that was already in the bin to the training set
+            to_training = (
+                self.bins_features.get(new_obs_bin, None),
+                self.bins_rewards.get(new_obs_bin, None),
+            )
+            # Update the bin
+            self.bins_features[new_obs_bin] = features
+            self.bins_rewards[new_obs_bin] = reward
+
+            self.rewards = torch.cat(list(self.bins_rewards.values()))
+            self.features = torch.cat(list(self.bins_features.values()))
+
+        return to_training
 
 
 class VariableNet(nn.Module):
@@ -135,6 +207,7 @@ class DENeuralTSDiag:
         style="ts",
         sampletype="r",
         decay=False,
+        valtype="extrema",
     ):
         self.net = net
         self.lambda_ = lambda_
@@ -150,7 +223,7 @@ class DENeuralTSDiag:
 
         self.loss_func = nn.MSELoss()
         self.train_dataset = ReplayDataset()
-        self.val_dataset = ReplayDataset()
+        self.val_dataset = ValidationReplayDataset(valtype=valtype)
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
         self.optimizer_class = optimizers[optim_string]

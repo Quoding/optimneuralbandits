@@ -78,24 +78,15 @@ n_combis_in_sol = len(combis_in_sol)
 
 logging.info(f"There are {n_combis_in_sol} combinations in the solution set")
 
-agent = DENeuralTSDiag(net, optim_string, nu=exploration_mult, lambda_=reg, style=style)
-
+agent = DENeuralTSDiag(
+    net, optim_string, nu=exploration_mult, lambda_=reg, style=style, valtype=valtype
+)
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
-X_train, X_val, y_train, y_val = train_test_split(
-    vecs.cpu(), rewards.cpu(), test_size=0.1, stratify=(rewards > thresh).cpu()
-)
-
-X_train, X_val, y_train, y_val = (
-    X_train.to(device),
-    X_val.to(device),
-    y_train.to(device),
-    y_val.to(device),
-)
-
-
+X_train, y_train, X_val, y_val = get_data_splits(vecs, rewards, val=valtype)
 agent.train_dataset.set_(X_train, y_train)
 agent.val_dataset.set_(X_val, y_val)
+
 
 logging.info("Warming up...")
 #### WARMUP ####

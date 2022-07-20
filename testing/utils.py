@@ -20,32 +20,6 @@ logging.basicConfig(level=logging.INFO)
 torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
 
-def discretize_targets(targets, factor):
-    discrete_risks = torch.floor(targets * factor) / factor
-    discrete_risks = np.round(discrete_risks.cpu().numpy(), decimals=1)
-
-    return discrete_risks
-
-
-def build_histogram(targets, factor, bin_size):
-    # Determine the bin edges
-    min_bin = floor(min(targets) * factor) / factor
-    max_bin = ceil(max(targets) * factor) / factor
-    # Handles case where maximum is exactly on the edge of the last bin
-    if max(targets).item() == max_bin:
-        max_bin += bin_size
-
-    n_bins = round((max_bin - min_bin) / 0.1)  # Deal with poor precision in Python...
-    list_bin_edges = np.around(
-        [min_bin + (bin_size * i) for i in range(n_bins + 1)], 1
-    ).astype("float32")
-    bin_edges = torch.from_numpy(list_bin_edges)
-
-    # Build discretized distribution with histogram
-    hist = torch.histogram(targets.cpu(), bin_edges)
-    return hist, n_bins, list_bin_edges
-
-
 class PullPolicy(Policy):
     """
     Pull policy for DE. Utility class to do DE
@@ -377,6 +351,12 @@ def parse_args():
         default=5,
         help="Patience for early stopping during training",
     )
+    parser.add_argument(
+        "--valtype",
+        type=str,
+        default="extrema",
+        help="Strategy for validation set selection",
+    )
     args = parser.parse_args()
     return args
 
@@ -475,6 +455,55 @@ def load_dataset(dataset_name, path_to_dataset=None):
     return combis, risks, pat_vecs, n_obs, n_dim
 
 
+def get_data_splits(combis, risks, val="extrema"):
+    if val == "extrema":
+        # Use extrema for validation set (min and max)
+        min_idx = torch.argmin(risks)
+        max_idx = torch.argmax(risks)
+        ids = torch.tensor([min_idx, max_idx])
+        X_val = combis[ids]
+        y_val = risks[ids]
+        min_of_indexes = min(min_idx, max_idx)
+        max_of_indexes = max(min_idx, max_idx)
+
+        # Remove used indexes from the observations
+        combis = torch.cat((combis[:max_of_indexes], combis[max_of_indexes + 1 :]))
+        combis = torch.cat((combis[:min_of_indexes], combis[min_of_indexes + 1 :]))
+        risks = torch.cat((risks[:max_of_indexes], risks[max_of_indexes + 1 :]))
+        risks = torch.cat((risks[:min_of_indexes], risks[min_of_indexes + 1 :]))
+    elif val == "bins":
+        # Use bins for validation set, so we have a wide spread
+        bin_size = 0.1
+        min_range = 0
+        max_range = 4
+        bins_edges = [
+            round(min_range + (i * bin_size), 1)
+            for i in range(int((max_range - min_range) / bin_size) + 1)
+        ]
+        X_val = []
+        y_val = []
+        # Put one observation per bin
+        for i in range(len(bins_edges) - 1):
+            lower_bound = bins_edges[i]
+            upper_bound = bins_edges[i + 1]
+            bigger_than = risks >= lower_bound
+            smaller_than = risks < upper_bound
+            inbound = torch.cat((bigger_than, smaller_than), dim=1).all(dim=1)
+            idx = torch.where(inbound)[0]
+            if len(idx) > 0:
+                idx = idx[0]
+                X_val.append(combis[idx])
+                y_val.append(risks[idx])
+                combis = torch.cat((combis[:idx], combis[idx + 1 :]))
+                risks = torch.cat((risks[:idx], risks[idx + 1 :]))
+        X_val = torch.stack(X_val)
+        y_val = torch.stack(y_val)
+
+    X_train, y_train = combis, risks
+
+    return X_train, y_train, X_val, y_val
+
+
 def compute_metrics(agent, combis, thresh, pat_vecs, true_sol, n_sigmas):
     # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
     sol, _, _ = agent.find_solution_in_vecs(combis, thresh, n_sigmas)
@@ -491,6 +520,32 @@ def compute_metrics(agent, combis, thresh, pat_vecs, true_sol, n_sigmas):
         ratio_app = n_inter / len(sol)
 
     return jaccard, ratio_app, percent_found_pat, n_inter
+
+
+def discretize_targets(targets, factor):
+    discrete_risks = torch.floor(targets * factor) / factor
+    discrete_risks = np.round(discrete_risks.cpu().numpy(), decimals=1)
+
+    return discrete_risks
+
+
+def build_histogram(targets, factor, bin_size):
+    # Determine the bin edges
+    min_bin = floor(min(targets) * factor) / factor
+    max_bin = ceil(max(targets) * factor) / factor
+    # Handles case where maximum is exactly on the edge of the last bin
+    if round(max(targets).item(), 1) == max_bin:
+        max_bin += bin_size
+
+    n_bins = round((max_bin - min_bin) / 0.1)  # Deal with poor precision in Python...
+    list_bin_edges = np.around(
+        [min_bin + (bin_size * i) for i in range(n_bins + 1)], 1
+    ).astype("float32")
+    bin_edges = torch.from_numpy(list_bin_edges)
+
+    # Build discretized distribution with histogram
+    hist = torch.histogram(targets.cpu(), bin_edges)
+    return hist, n_bins, list_bin_edges
 
 
 class Network(nn.Module):
