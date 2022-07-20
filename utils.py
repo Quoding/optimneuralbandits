@@ -393,7 +393,7 @@ def parse_args():
     parser.add_argument(
         "--patience",
         type=int,
-        default=5,
+        default=25,
         help="Patience for early stopping during training",
     )
     parser.add_argument(
@@ -406,6 +406,11 @@ def parse_args():
         "--nobatchnorm",
         action="store_true",
         help="Use batch norm in neural network",
+    )
+    parser.add_argument(
+        "--nolds",
+        action="store_true",
+        help="Use label distribution smoothing in training",
     )
     args = parser.parse_args()
     return args

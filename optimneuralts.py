@@ -41,6 +41,7 @@ class DENeuralTSDiag:
         self.loss_func = nn.MSELoss()
         self.train_dataset = ReplayDataset()
         self.val_dataset = ValidationReplayDataset(valtype=valtype)
+
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
         self.optimizer_class = optimizers[optim_string]
@@ -78,7 +79,8 @@ class DENeuralTSDiag:
         lr=1e-2,
         batch_size=-1,
         generator=torch.Generator(device="cuda"),
-        patience=5,
+        patience=25,
+        use_lds=True,
     ):
         # For full batch grad descent
         if batch_size == -1:
@@ -90,13 +92,20 @@ class DENeuralTSDiag:
         optimizer = self.optimizer_class(
             self.net.parameters(), lr=lr, weight_decay=weight_decay
         )
-        # TODO LDS
         # Although we're giving the whole dataset, the class is made such that only training examples are used here
+        shuffle = True
+        sampler = None
+        if use_lds:
+            w = self.train_dataset.get_weights(reweight="sqrt_inv")
+            sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
+            shuffle = False
+
         loader = DataLoader(
             self.train_dataset,
             batch_size=batch_size,
-            shuffle=True,
+            shuffle=shuffle,
             generator=generator,
+            sampler=sampler,
         )
 
         early_stop = EarlyStopping(patience)
@@ -130,6 +139,7 @@ class DENeuralTSDiag:
         Args:
             vecs (torch.Tensor/list of torch.Tensor): List of vectors to check for solution membership
             thresh (float): Threshold against which to compare for the solution
+            n_sigmas (int): Number of sigmas to consider (sigma rule)
         Returns:
             tensor: torch.Tensor of torch.Tensor of the solution
         """
@@ -137,8 +147,9 @@ class DENeuralTSDiag:
         solution = []
         mus = []
         sigmas = []
+        self.net.eval()
         for vec in vecs:
-            mu, g_list = self.compute_activation_and_grad(vec)
+            mu, g_list = self.compute_activation_and_grad(vec[None])
             sigma = torch.sum(g_list * g_list / self.U)
             sigma = torch.sqrt(self.lambda_ * sigma)
 
@@ -146,11 +157,12 @@ class DENeuralTSDiag:
                 solution.append(vec)
 
             mus.append(mu.item())
-            sigmas.append(3 * sigma.item())
+            sigmas.append(n_sigmas * sigma.item())
         if solution:
             solution = torch.stack(solution)
         else:
             solution = torch.tensor([])
+        self.net.train()
 
         return (solution, mus, sigmas)
 

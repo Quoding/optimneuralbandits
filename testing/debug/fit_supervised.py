@@ -21,9 +21,9 @@ import matplotlib
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append("../..")
-sys.path.append("..")
-from utils import *
+# from utils import *
 from fit_sup_utils import *
+from networks import Network, VariableNet
 
 from tqdm import tqdm
 
@@ -37,9 +37,6 @@ plt.rcParams["font.family"] = "serif"
 # plt.rcParams["text.latex.preamble"] = [r"\usepackage{amsmath}"]
 plt.style.use("ggplot")
 title_font_size = "10"
-
-# %load_ext autoreload
-# %autoreload 2
 
 
 # %% [markdown]
@@ -76,9 +73,12 @@ device = torch.device("cuda")
 # * lr of 0.001 seem to help that overfitting, nice, lr of 0.01 seems to fail overfitting in some cases (dataset 100 and 50)
 # * mse is better than rmse
 # * If doing LDS, sqrt_inv is better than just True
-# * Extrema validation set seems to work well with low dimension data
 # * For low dim data: MSE seems equal or better than quantile in more situations (learning rate for example)
 # * Avoir un validation set pondere de maniere plus egale (ex. bins et extrema)
+#
+# * **LDS WORKS, IMPORTANT, USE IT**
+# * **EXTREMA VALIDATION IS BETTER THAN BINS**
+# * **WITH VAL EXTREMA, MSE PERFORMS SIMILARLY TO QUANTILE, BUT IS SIMPLER**
 
 # %% [markdown]
 # ### What does not work
@@ -95,6 +95,8 @@ device = torch.device("cuda")
 # * Quantile loss seems to work better with LDS
 # * More data always helps. Also, the amount of data isn't a problem in our setting, the computation of the label is.
 # * The more dimensions we have, the less effective having a validation set seems to be. Possible explanation: having a training set which is representative of the validation set in some way gets harder the more dimensions we have, therefore, validation loss can hardly go down, so training stops early and cannot even learn a good representation.
+# * For 50 dims, 10000 obs is enough
+# * Extrema seems better in general than bins for validation set since bins tends to get a representation which diminishes the loss at the mean of the dataset, which is easy, but not helpful
 
 # %% [markdown]
 # ### To try
@@ -126,30 +128,30 @@ n_epochs = 100
 seeds = [0]
 param_values = {
     "dataset": [
-        # "50_rx_100000_combis_4_patterns_3",
-        "100_rx_100000_combis_10_patterns_35",
-        "1000_rx_100000_combis_10_patterns_25",
+        "50_rx_100000_combis_4_patterns_3",
+        # "100_rx_100000_combis_10_patterns_35",
+        # "1000_rx_100000_combis_10_patterns_25",
     ],
     "width": [128],
-    "hidden": [4],
-    "n_obs": [30000, 40000, 50000],
+    "hidden": [3],
+    "n_obs": [10000],
     "decay": [0],
     "lr": [0.001],
     "custom_layers": [None],
-    "reweight": ["sqrt_inv", None],
-    "batch_size": [32],
+    "reweight": ["sqrt_inv"],
+    "batch_size": [32, 512],
     "dropout_rate": [None],
-    "loss": [["mse"], ["quantile", [0.3, 0.5, 0.7]], ["quantile", [0.5, 0.7]]],
+    "loss": [["mse"]],
     "classif_thresh": [None],
     "batch_norm": [True],
-    "patience": [10, 25],
-    "validation": ["bins", "extrema"],
+    "patience": [25],
+    "validation": ["extrema"],
 }
 configs = [dict(zip(param_values, v)) for v in product(*param_values.values())]
 print(len(configs))
 
 # %%
-def run_config(config, exp_dir="test_high_dim_more_data"):
+def run_config(config, exp_dir="test_batchsize"):
     n_layers = config["hidden"]
     width = config["width"]
     n_obs = config["n_obs"]
@@ -246,6 +248,7 @@ def run_config(config, exp_dir="test_high_dim_more_data"):
 
             ### EVAL ###
             with torch.no_grad():
+                net.eval()
                 # Compute losses
                 (
                     train_activ,
@@ -265,6 +268,7 @@ def run_config(config, exp_dir="test_high_dim_more_data"):
                     X_test,
                     y_test,
                 )
+                net.train()
 
                 # Get R2 metric
                 train_r2 = r2_score(
@@ -412,10 +416,10 @@ def run_config(config, exp_dir="test_high_dim_more_data"):
 
 
 # %%
-# for config in configs[:1]:
-#     run_config(config)
+for config in configs:
+    run_config(config)
 
-with Pool(4) as p:
-    p.map(run_config, configs)
+# with Pool(4) as p:
+#     p.map(run_config, configs)
 
 # %%

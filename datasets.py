@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
+from torch.nn.functional import conv1d
 from utils import discretize_targets, build_histogram, gaussian_fn
 
 
