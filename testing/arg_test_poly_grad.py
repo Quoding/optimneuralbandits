@@ -46,8 +46,9 @@ combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
 
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
-reward_fn = lambda idx: risks[idx] + torch.normal(
-    torch.tensor([0.0]), torch.tensor([0.1])
+reward_fn = lambda idx: (
+    risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
+    risks[idx],
 )
 
 
@@ -94,16 +95,16 @@ logging.info("Warming up...")
 #### WARMUP ####
 agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience)
 
-#### GET METRICS POST WARMUP, PRE TRAINING ####
-# jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-#     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
-# )
-# logging.info(
-#     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
-# )
-# jaccards.append(jaccard)
-# ratio_apps.append(ratio_app)
-# percent_found_pats.append(percent_found_pat)
+## GET METRICS POST WARMUP, PRE TRAINING ####
+jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
+    agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+)
+logging.info(
+    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+)
+jaccards.append(jaccard)
+ratio_apps.append(ratio_app)
+percent_found_pats.append(percent_found_pat)
 logging.info("Warm up over. Starting training")
 
 #### TRAINING ####
@@ -111,7 +112,8 @@ for i in range(n_trials):
     a_t, idx, best_member_grad = do_gradient_optim(
         agent, pop_optim_n_members, combis, lr=pop_optim_lr
     )
-    r_t = reward_fn(idx)[:, None]
+    r_t, true_r = reward_fn(idx)
+    r_t = r_t[:, None]
     agent.U += best_member_grad * best_member_grad
 
     a_train, r_train = agent.val_dataset.update(a_t, r_t)

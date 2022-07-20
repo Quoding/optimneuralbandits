@@ -382,17 +382,18 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
         optimizer.zero_grad()
         agent.net.zero_grad()
 
-        dot = make_dot(-sample_r)
-        dot.format = "svg"
-        dot.render()
+        # dot = make_dot(-sample_r)
+        # dot.format = "svg"
+        # dot.render()
 
         # Record input_vecs and values in the population
         population_values.append(sample_r.item())
 
         # Backprop
-        sample_r = sample_r - (2 * sample_r)
+        sample_r = -sample_r
         sample_r.backward()
-
+        # print(agent.net.model[0].weight.grad)
+        # input()
         optimizer.step()
 
         population = torch.cat((population, input_vec.detach().clone()))

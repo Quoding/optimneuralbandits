@@ -7,6 +7,7 @@ testing/datasets/patterns/*.json
 **/runs
 **/images
 .vscode
+*.gv*
 testing/debug/images/
 # testing/debug/runs/
 # Byte-compiled / optimized / DLL files
