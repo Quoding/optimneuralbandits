@@ -1,200 +1,17 @@
 import logging
-import time
 import types
 from copy import deepcopy
-from math import sqrt
-from typing import Type
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import torch.optim as optim
-from detorch import DE, Policy, Strategy
-from detorch.config import Config, default_config
-from torch import optim
-from torch.utils.data import DataLoader, Dataset
-from sklearn.model_selection import StratifiedShuffleSplit
+
+from torch.utils.data import DataLoader, WeightedRandomSampler
+
+from datasets import ReplayDataset, ValidationReplayDataset
+from utils import EarlyStopping, get_validation_loss
 
 logging.basicConfig(level=logging.INFO)
-
-
-class NetworkDropout(nn.Module):
-    def __init__(self, dim, hidden_size=100, mask=None, dropout=False):
-        super().__init__()
-        self.fc1 = nn.Linear(dim, hidden_size)
-        self.activate = nn.ReLU()
-        self.fc2 = nn.Linear(hidden_size, 1)
-        self.mask = mask
-        self.hidden_size = hidden_size
-        if dropout:
-            self.dropout = nn.Dropout(dropout)
-        else:
-            self.dropout = nn.Identity()
-
-    def set_mask(self, mask):
-        self.mask = mask
-
-    def forward(self, x):
-        return self.fc2(self.activate(self.dropout(self.fc1(x))))
-
-
-class ReplayDataset(Dataset):
-    def __init__(self, features=None, rewards=None):
-        self.features = features
-        self.rewards = rewards
-
-    def __len__(self):
-        return len(self.rewards)
-
-    def __getitem__(self, idx):
-        return self.features[idx], self.rewards[idx]
-
-    def set_(self, features_2d, rewards_2d):
-        self.features = features_2d
-        self.rewards = rewards_2d
-
-    def add(self, features, reward):
-        if features is None or reward is None:
-            return
-        self.features = torch.cat((self.features, features))
-        self.rewards = torch.cat((self.rewards, reward))
-
-
-class ValidationReplayDataset(ReplayDataset):
-    def __init__(self, features=None, rewards=None, valtype=None):
-        self.features = None
-        self.rewards = None
-        self.valtype = valtype
-        self.bins_features = {}
-        self.bins_rewards = {}
-
-        if features is None or rewards is None:
-            pass
-        else:
-            self.set_(features, rewards)
-
-    def build_mapping(self):
-        for i in range(len(self.rewards)):
-            reward = self.rewards[i].unsqueeze(0)
-            vec = self.features[i].unsqueeze(0)
-
-            bin_ = int(reward * 10) / 10
-
-            self.bins_features[bin_] = vec
-            self.bins_rewards[bin_] = reward
-
-    def __len__(self):
-        return len(self.rewards)
-
-    def set_(self, features_2d, rewards_2d):
-        self.features = features_2d
-        self.rewards = rewards_2d
-
-        if self.valtype == "bins":
-            self.build_mapping()
-
-    def update(self, features, reward):
-        to_training = (features, reward)
-        if self.valtype == "extrema":
-            # If valtype is extrema, then the set is composed of only 2 observations, the min and max of rewards
-            # Assumes sorted tensors based on self.rewards
-            if reward < min(self.rewards):
-                to_training = (
-                    self.features[0].clone().unsqueeze(0),
-                    self.rewards[0].clone().unsqueeze(0),
-                )
-                self.features[0] = features[0]
-                self.rewards[0] = reward[0]
-            elif reward > max(self.rewards):
-                to_training = (
-                    self.features[1].clone().unsqueeze(0),
-                    self.rewards[1].clone().unsqueeze(0),
-                )
-                self.features[1] = features[0]
-                self.rewards[1] = reward[0]
-
-        elif self.valtype == "bins":
-            # TODO TEST THIS
-            # Update the bins with the new observation
-            new_obs_bin = int(reward * 10) / 10
-            # Send the observation that was already in the bin to the training set
-            to_training = (
-                self.bins_features.get(new_obs_bin, None),
-                self.bins_rewards.get(new_obs_bin, None),
-            )
-            # Update the bin
-            self.bins_features[new_obs_bin] = features
-            self.bins_rewards[new_obs_bin] = reward
-
-            self.rewards = torch.cat(list(self.bins_rewards.values()))
-            self.features = torch.cat(list(self.bins_features.values()))
-
-        return to_training
-
-
-class VariableNet(nn.Module):
-    def __init__(self, dim, layer_widths):
-        super().__init__()
-        self.layers = nn.ModuleList()
-        self.layers.append(nn.Linear(dim, layer_widths[0]))
-        self.layers.append(nn.ReLU())
-
-        for i in range(len(layer_widths) - 1):
-            self.layers.append(nn.Linear(layer_widths[i], layer_widths[i + 1]))
-            self.layers.append(nn.ReLU())
-
-        self.layers.append(nn.Linear(layer_widths[-1], 1))
-
-    def forward(self, x):
-        for layer in self.layers:
-            x = layer(x)
-        return x
-
-
-class EarlyStopping:
-    def __init__(self, patience):
-        self.patience = patience
-        self.min_loss = float("inf")
-        self.count = 0
-        self.best_model = None
-
-    def __call__(self, cur_loss, model):
-        # If no improvement
-        if cur_loss >= self.min_loss:
-            self.count += 1
-        else:  # Improvement, store state dict
-            self.count = 0
-            self.store(model)
-            self.min_loss = cur_loss
-
-    def store(self, model):
-        self.best_model = deepcopy(model)
-        self.best_model.zero_grad()
-
-    @property
-    def early_stop(self):
-        if self.count >= self.patience:
-            return True
-
-
-class Network(nn.Module):
-    def __init__(self, dim, n_hidden_layers, hidden_size=100):
-        super().__init__()
-        self.model = nn.Sequential()
-
-        self.model.add_module("Linear 0", nn.Linear(dim, hidden_size))
-        self.model.add_module("ReLU 0", nn.ReLU())
-
-        for i in range(n_hidden_layers - 1):
-            self.model.add_module(
-                f"Linear {i + 1}", nn.Linear(hidden_size, hidden_size)
-            )
-            self.model.add_module(f"ReLU {i + 1}", nn.ReLU())
-
-        self.model.add_module(f"Linear Final", nn.Linear(hidden_size, 1))
-
-    def forward(self, x):
-        return self.model(x)
 
 
 class DENeuralTSDiag:
@@ -273,7 +90,7 @@ class DENeuralTSDiag:
         optimizer = self.optimizer_class(
             self.net.parameters(), lr=lr, weight_decay=weight_decay
         )
-
+        # TODO LDS
         # Although we're giving the whole dataset, the class is made such that only training examples are used here
         loader = DataLoader(
             self.train_dataset,
@@ -361,11 +178,3 @@ class LenientDENeuralTSDiag(DENeuralTSDiag):
             )
         # torch.set_grad_enabled(False)
         return sample_r, g_list, mu.detach().item(), cb.item()
-
-
-def get_validation_loss(net, val_dataset, loss_fn):
-    X_val, y_val = val_dataset.features, val_dataset.rewards
-    with torch.no_grad():
-        pred = net(X_val)
-        loss = loss_fn(pred, y_val)
-    return loss

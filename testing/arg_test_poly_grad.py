@@ -7,10 +7,12 @@ import numpy as np
 import pandas as pd
 import torch
 from sklearn.model_selection import train_test_split
-from utils import *
+from detorch import Strategy
 
 sys.path.append("..")
-from optimneuralts import Network, DENeuralTSDiag, LenientDENeuralTSDiag
+from utils import *
+from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
+from networks import Network
 
 
 #### SET UP ####
@@ -39,6 +41,7 @@ n_sigmas = args.n_sigmas
 ci_thresh = args.ci_thresh
 patience = args.patience
 valtype = args.valtype
+batch_norm = args.batchnorm
 
 make_deterministic(seed)
 
@@ -64,7 +67,9 @@ class DEConfig:
 #### SET UP NETWORK AND DE ####
 de_config = DEConfig
 de_policy = PullPolicy
-net = Network(n_dim, n_hidden_layers, width).to(device)
+net = Network(n_dim, n_hidden_layers, hidden_size=width, batch_norm=batch_norm).to(
+    device
+)
 
 #### METRICS ####
 jaccards = []
@@ -120,7 +125,6 @@ for i in range(n_trials):
     agent.train_dataset.add(a_train, r_train)
 
     loss = agent.train(n_epochs, lr, batch_size=batch_size, patience=patience)
-
     #### COMPUTE METRICS ####
     if (i + 1) % 100 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(

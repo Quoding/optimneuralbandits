@@ -13,50 +13,13 @@ from torch.nn.functional import conv1d
 from torch.utils.data import DataLoader, Dataset, WeightedRandomSampler
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.modules.loss import _Loss
-
-sys.path.append("../..")
-sys.path.append("..")
 import random
 
+sys.path.append("../..")
 from utils import *
 
+
 device = torch.device("cuda")
-
-
-class Network(nn.Module):
-    def __init__(
-        self,
-        dim,
-        n_hidden_layers,
-        n_output=1,
-        hidden_size=100,
-        dropout_rate=None,
-        batch_norm=False,
-    ):
-        super().__init__()
-        layers = nn.ModuleList()
-
-        layers.append(nn.Linear(dim, hidden_size))
-        if batch_norm:
-            layers.append(nn.BatchNorm1d(hidden_size))
-        if dropout_rate is not None:
-            layers.append(nn.Dropout(dropout_rate))
-        layers.append(nn.ReLU())
-
-        for _ in range(n_hidden_layers - 1):
-            layers.append(nn.Linear(hidden_size, hidden_size))
-            if batch_norm:
-                layers.append(nn.BatchNorm1d(hidden_size))
-            if dropout_rate is not None:
-                layers.append(nn.Dropout(dropout_rate))
-            layers.append(nn.ReLU())
-
-        layers.append(nn.Linear(hidden_size, n_output))
-
-        self.model = nn.Sequential(*layers)
-
-    def forward(self, x):
-        return self.model(x)
 
 
 class AE(nn.Module):
@@ -272,13 +235,6 @@ class EarlyStoppingActiv:
     def early_stop(self):
         if self.count >= self.patience:
             return True
-
-
-def gaussian_fn(size, std):
-    n = torch.arange(0, size) - (size - 1.0) / 2.0
-    sig2 = 2 * std * std
-    w = torch.exp(-(n**2) / sig2)
-    return w
 
 
 def load_dataset(dataset_path):
@@ -504,26 +460,6 @@ def save_metrics(array, path):
     dir_ = "/".join(path.split("/")[:-1])
     os.makedirs(dir_, exist_ok=True)
     np.save(path, array)
-
-
-class QuantileLoss(nn.Module):
-    def __init__(self, quantiles):
-        super().__init__()
-        self.quantiles = quantiles
-
-    def forward(self, preds, target):
-        assert not target.requires_grad
-        assert preds.size(0) == target.size(0)
-        losses = []
-        errors = target - preds
-
-        for i, q in enumerate(self.quantiles):
-            losses.append(
-                torch.max((q - 1) * errors[:, i], q * errors[:, i]).unsqueeze(1)
-            )
-        loss = torch.mean(torch.sum(torch.cat(losses, dim=1), dim=1))
-
-        return loss
 
 
 def get_loss(loss_name, quantiles=[0.5, 0.7]):

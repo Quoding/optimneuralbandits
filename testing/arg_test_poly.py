@@ -8,10 +8,10 @@ import numpy as np
 import pandas as pd
 import torch
 
-from utils import *
-
 sys.path.append("..")
-from optimneuralts import Network, DENeuralTSDiag, LenientDENeuralTSDiag
+from utils import *
+from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
+from networks import Network
 
 
 #### SET UP ####
@@ -65,7 +65,7 @@ class DEConfig:
 #### SET UP NETWORK AND DE ####
 de_config = DEConfig
 de_policy = PullPolicy
-net = Network(n_dim, n_hidden_layers, width).to(device)
+net = Network(n_dim, n_hidden_layers, hidden_size=width, batch_norm=True).to(device)
 
 #### METRICS ####
 jaccards = []

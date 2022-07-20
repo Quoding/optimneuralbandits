@@ -1,17 +1,16 @@
 import argparse
 import json
-import os
-import random
-from math import isnan, floor, ceil
-from typing import Type
 import logging
+import random
+from copy import deepcopy
+from math import ceil, floor, isnan
+from typing import Type
+
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
-
-from torchviz import make_dot
-from detorch import DE, Policy, Strategy
+from detorch import DE, Policy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
 
@@ -63,6 +62,52 @@ class PullPolicy(Policy):
     def transform(self):
         vec = torch.clip(self.params, *PullPolicy.bounds).to(device)
         self.params = nn.Parameter(vec, requires_grad=False)
+
+
+class EarlyStopping:
+    def __init__(self, patience):
+        self.patience = patience
+        self.min_loss = float("inf")
+        self.count = 0
+        self.best_model = None
+
+    def __call__(self, cur_loss, model):
+        # If no improvement
+        if cur_loss >= self.min_loss:
+            self.count += 1
+        else:  # Improvement, store state dict
+            self.count = 0
+            self.store(model)
+            self.min_loss = cur_loss
+
+    def store(self, model):
+        self.best_model = deepcopy(model)
+        self.best_model.zero_grad()
+
+    @property
+    def early_stop(self):
+        if self.count >= self.patience:
+            return True
+
+
+class QuantileLoss(nn.Module):
+    def __init__(self, quantiles):
+        super().__init__()
+        self.quantiles = quantiles
+
+    def forward(self, preds, target):
+        assert not target.requires_grad
+        assert preds.size(0) == target.size(0)
+        losses = []
+        errors = target - preds
+
+        for i, q in enumerate(self.quantiles):
+            losses.append(
+                torch.max((q - 1) * errors[:, i], q * errors[:, i]).unsqueeze(1)
+            )
+        loss = torch.mean(torch.sum(torch.cat(losses, dim=1), dim=1))
+
+        return loss
 
 
 def compute_relative_risk(vec, X, y):
@@ -251,7 +296,7 @@ def parse_args():
         "-l",
         "--layers",
         type=int,
-        default=2,
+        default=3,
         help="Number of hidden layers",
     )
     parser.add_argument(
@@ -285,14 +330,14 @@ def parse_args():
         "--style",
         type=str,
         default="ts",
-        choices=["ts", "rts", "ucb"],
+        choices=["ts", "ucb"],
         help="Choose between NeuralTS and NeuralUCB to train",
     )
 
     parser.add_argument(
         "--optimizer",
         type=str,
-        default="sgd",
+        default="adam",
         choices=["sgd", "adam"],
         help="Select SGD or Adam as optimizer for NN",
     )
@@ -357,6 +402,11 @@ def parse_args():
         default="extrema",
         help="Strategy for validation set selection",
     )
+    parser.add_argument(
+        "--batchnorm",
+        action="store_true",
+        help="Use batch norm in neural network",
+    )
     args = parser.parse_args()
     return args
 
@@ -381,10 +431,6 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
         # Clear gradient from sampling so backprop is clean
         optimizer.zero_grad()
         agent.net.zero_grad()
-
-        # dot = make_dot(-sample_r)
-        # dot.format = "svg"
-        # dot.render()
 
         # Record input_vecs and values in the population
         population_values.append(sample_r.item())
@@ -549,20 +595,16 @@ def build_histogram(targets, factor, bin_size):
     return hist, n_bins, list_bin_edges
 
 
-class Network(nn.Module):
-    """Deprecated, maintained here for compatibility"""
+def gaussian_fn(size, std):
+    n = torch.arange(0, size) - (size - 1.0) / 2.0
+    sig2 = 2 * std * std
+    w = torch.exp(-(n**2) / sig2)
+    return w
 
-    def __init__(self, dim, n_hidden_layers, hidden_size=100):
-        super().__init__()
-        self.activation = nn.ReLU()
-        self.layers = nn.ModuleList()
 
-        self.layers.append(nn.Linear(dim, hidden_size))
-        for _ in range(n_hidden_layers - 1):
-            self.layers.append(nn.Linear(hidden_size, hidden_size))
-        self.layers.append(nn.Linear(hidden_size, 1))
-
-    def forward(self, x):
-        for layer in self.layers[:-1]:
-            x = self.activation(layer(x))
-        return self.layers[-1](x)
+def get_validation_loss(net, val_dataset, loss_fn):
+    X_val, y_val = val_dataset.features, val_dataset.rewards
+    with torch.no_grad():
+        pred = net(X_val)
+        loss = loss_fn(pred, y_val)
+    return loss
