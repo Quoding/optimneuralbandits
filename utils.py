@@ -403,7 +403,7 @@ def parse_args():
         help="Strategy for validation set selection",
     )
     parser.add_argument(
-        "--batchnorm",
+        "--nobatchnorm",
         action="store_true",
         help="Use batch norm in neural network",
     )

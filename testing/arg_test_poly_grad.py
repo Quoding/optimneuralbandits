@@ -41,7 +41,7 @@ n_sigmas = args.n_sigmas
 ci_thresh = args.ci_thresh
 patience = args.patience
 valtype = args.valtype
-batch_norm = args.batchnorm
+batch_norm = not args.nobatchnorm
 
 make_deterministic(seed)
 
