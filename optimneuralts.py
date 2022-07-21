@@ -9,7 +9,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from datasets import ReplayDataset, ValidationReplayDataset
-from utils import EarlyStopping, get_validation_loss
+from utils import EarlyStopping, get_model_selection_loss
 
 logging.basicConfig(level=logging.INFO)
 
@@ -41,6 +41,7 @@ class DENeuralTSDiag:
         self.loss_func = nn.MSELoss()
         self.train_dataset = ReplayDataset()
         self.val_dataset = ValidationReplayDataset(valtype=valtype)
+        self.valtype = valtype
 
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
@@ -109,6 +110,12 @@ class DENeuralTSDiag:
         )
 
         early_stop = EarlyStopping(patience)
+
+        # Choose whether we do model selection based on training set loss or validation set loss
+        if self.valtype == "noval":
+            val_dataset = self.train_dataset
+        else:
+            val_dataset = self.val_dataset
         # Train loop
         for _ in range(n_epochs):
             for X, y in loader:
@@ -118,19 +125,22 @@ class DENeuralTSDiag:
                 loss.backward()
                 optimizer.step()
 
-            val_loss = get_validation_loss(self.net, self.val_dataset, self.loss_func)
-
-            early_stop(val_loss, self.net)
+            self.net.eval()
+            stored_loss = get_model_selection_loss(
+                self.net, val_dataset, self.loss_func
+            )
+            self.net.train()
+            early_stop(stored_loss, self.net)
 
             if early_stop.early_stop:
                 break
 
         optimizer.zero_grad()
 
-        # Set the net to the best in validation we've seen
+        # Set the net to the best in model selection loss we've seen
         # Deep copy to ensure no remaining references to the early_stop object
         self.net = deepcopy(early_stop.best_model)
-        return loss.detach().item()
+        return stored_loss.detach().item()
 
     def find_solution_in_vecs(self, vecs, thresh, n_sigmas):
         """Find and return solutions according to the threshold in the given set of vectors

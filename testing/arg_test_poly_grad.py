@@ -43,11 +43,11 @@ patience = args.patience
 valtype = args.valtype
 batch_norm = not args.nobatchnorm
 use_lds = not args.nolds
-
+usedecay = args.usedecay
 
 make_deterministic(seed)
 
-combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset, "testing/datasets")
+combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
 
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
@@ -94,11 +94,12 @@ agent = DENeuralTSDiag(
     lambda_=reg,
     style=style,
     valtype=valtype,
+    decay=usedecay,
 )
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
 
-X_train, y_train, X_val, y_val = get_data_splits(vecs, rewards, val=valtype)
+X_train, y_train, X_val, y_val = get_data_splits(vecs, rewards, valtype=valtype)
 
 agent.train_dataset.set_(X_train, y_train)
 agent.val_dataset.set_(X_val, y_val)
@@ -134,7 +135,6 @@ for i in range(n_trials):
     loss = agent.train(
         n_epochs, lr=lr, batch_size=batch_size, patience=patience, use_lds=use_lds
     )
-    print(i)
     #### COMPUTE METRICS ####
     if (i + 1) % 100 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
@@ -166,5 +166,3 @@ torch.save(ratio_apps, f"{output_dir}/ratio_apps/{seed}.pth")
 torch.save(percent_found_pats, f"{output_dir}/ratio_found_pats/{seed}.pth")
 torch.save(losses, f"{output_dir}/losses/{seed}.pth")
 torch.save(dataset_losses, f"{output_dir}/dataset_losses/{seed}.pth")
-
-# TODO Negative of sample_r should give proper gradients and not 0.

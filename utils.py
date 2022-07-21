@@ -399,7 +399,7 @@ def parse_args():
     parser.add_argument(
         "--valtype",
         type=str,
-        default="extrema",
+        default="noval",
         help="Strategy for validation set selection",
     )
     parser.add_argument(
@@ -411,6 +411,11 @@ def parse_args():
         "--nolds",
         action="store_true",
         help="Use label distribution smoothing in training",
+    )
+    parser.add_argument(
+        "--usedecay",
+        action="store_true",
+        help="Use weight decay during training",
     )
     args = parser.parse_args()
     return args
@@ -433,6 +438,7 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
 
         # Evaluate
         sample_r, g_list, mu, cb = agent.get_sample(input_vec)
+        print(mu)
         # Clear gradient from sampling so backprop is clean
         optimizer.zero_grad()
         agent.net.zero_grad()
@@ -501,8 +507,8 @@ def load_dataset(dataset_name, path_to_dataset="datasets"):
     return combis, risks, pat_vecs, n_obs, n_dim
 
 
-def get_data_splits(combis, risks, val="extrema"):
-    if val == "extrema":
+def get_data_splits(combis, risks, valtype="extrema"):
+    if valtype == "extrema":
         # Use extrema for validation set (min and max)
         min_idx = torch.argmin(risks)
         max_idx = torch.argmax(risks)
@@ -517,7 +523,7 @@ def get_data_splits(combis, risks, val="extrema"):
         combis = torch.cat((combis[:min_of_indexes], combis[min_of_indexes + 1 :]))
         risks = torch.cat((risks[:max_of_indexes], risks[max_of_indexes + 1 :]))
         risks = torch.cat((risks[:min_of_indexes], risks[min_of_indexes + 1 :]))
-    elif val == "bins":
+    elif valtype == "bins":
         # Use bins for validation set, so we have a wide spread
         bin_size = 0.1
         min_range = 0
@@ -544,6 +550,9 @@ def get_data_splits(combis, risks, val="extrema"):
                 risks = torch.cat((risks[:idx], risks[idx + 1 :]))
         X_val = torch.stack(X_val)
         y_val = torch.stack(y_val)
+    if valtype == "noval":
+        X_val = None
+        y_val = None
 
     X_train, y_train = combis, risks
 
@@ -601,8 +610,8 @@ def gaussian_fn(size, std):
     return w
 
 
-def get_validation_loss(net, val_dataset, loss_fn):
-    X_val, y_val = val_dataset.features, val_dataset.rewards
+def get_model_selection_loss(net, dataset, loss_fn):
+    X_val, y_val = dataset.features, dataset.rewards
     with torch.no_grad():
         pred = net(X_val)
         loss = loss_fn(pred, y_val)
