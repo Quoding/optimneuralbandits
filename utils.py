@@ -316,13 +316,13 @@ def parse_args():
     parser.add_argument(
         "--n_epochs",
         type=int,
-        default=10,
-        help="Number of epochs / gradient steps (if full SGD) in NeuralTS/NeuralUCB",
+        default=100,
+        help="Number of epochs / gradient steps (if full GD) in NeuralTS/NeuralUCB",
     )
     parser.add_argument(
         "--lr",
         type=float,
-        default=1e-2,
+        default=1e-3,
         help="Learning rate for SGD / Adam optimizer",
     )
 
@@ -358,7 +358,7 @@ def parse_args():
     parser.add_argument(
         "--pop_n_members",
         type=int,
-        default=32,
+        default=256,
         help="Number of members for the population optimizer",
     )
     parser.add_argument(
@@ -476,18 +476,12 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     return a_t, idx, g_list
 
 
-def load_dataset(dataset_name, path_to_dataset=None):
-    if path_to_dataset is None:
-        dataset = pd.read_csv(f"datasets/combinations/{dataset_name}.csv")
+def load_dataset(dataset_name, path_to_dataset="datasets"):
 
-        with open(f"datasets/patterns/{dataset_name}.json", "r") as f:
-            patterns = json.load(f)
+    dataset = pd.read_csv(f"{path_to_dataset}/combinations/{dataset_name}.csv")
 
-    else:
-        dataset = pd.read_csv(f"{path_to_dataset}/combinations/{dataset_name}.csv")
-
-        with open(f"{path_to_dataset}/patterns/{dataset_name}.json", "r") as f:
-            patterns = json.load(f)
+    with open(f"{path_to_dataset}/patterns/{dataset_name}.json", "r") as f:
+        patterns = json.load(f)
     # Remove last 3 columns that are risk, inter, dist
     combis = dataset.iloc[:, :-3]
 

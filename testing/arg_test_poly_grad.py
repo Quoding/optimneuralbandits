@@ -44,9 +44,10 @@ valtype = args.valtype
 batch_norm = not args.nobatchnorm
 use_lds = not args.nolds
 
+
 make_deterministic(seed)
 
-combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
+combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset, "testing/datasets")
 
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
@@ -107,15 +108,15 @@ logging.info("Warming up...")
 agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, use_lds=use_lds)
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
-jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-    agent, combis, thresh, pat_vecs, true_sol, n_sigmas
-)
-logging.info(
-    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
-)
-jaccards.append(jaccard)
-ratio_apps.append(ratio_app)
-percent_found_pats.append(percent_found_pat)
+# jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
+#     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+# )
+# logging.info(
+#     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+# )
+# jaccards.append(jaccard)
+# ratio_apps.append(ratio_app)
+# percent_found_pats.append(percent_found_pat)
 logging.info("Warm up over. Starting training")
 
 #### TRAINING ####
@@ -130,9 +131,10 @@ for i in range(n_trials):
     a_train, r_train = agent.val_dataset.update(a_t, r_t)
     agent.train_dataset.add(a_train, r_train)
 
-    agent.train(
+    loss = agent.train(
         n_epochs, lr=lr, batch_size=batch_size, patience=patience, use_lds=use_lds
     )
+    print(i)
     #### COMPUTE METRICS ####
     if (i + 1) % 100 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(

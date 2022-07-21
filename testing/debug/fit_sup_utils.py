@@ -402,7 +402,15 @@ def plot_metric(n_epochs, train_losses, val_losses, test_losses=None):
 
 
 def plot_pred_vs_gt(
-    train_true, train_pred, val_true, val_pred, test_true, test_pred, title, pred_idx
+    train_true,
+    train_pred,
+    val_true,
+    val_pred,
+    test_true,
+    test_pred,
+    title,
+    pred_idx,
+    invert=False,
 ):
     fig = plt.figure()
     plt.title(title)
@@ -413,7 +421,12 @@ def plot_pred_vs_gt(
     plt.ylim(0, ylim)
     plt.xlim(0, xlim)
     val_alpha = 0.1
-    z_order = 1
+    z_val = 1
+    z_test = 1
+    z_train = 1
+    if invert:
+        z_test = 2
+
     # If we have a test set (basically, if we have a small validation set), plot it
     if test_true is not None and test_pred is not None:
         plt.scatter(
@@ -422,10 +435,11 @@ def plot_pred_vs_gt(
             alpha=0.1,
             color="tab:green",
             label="Test",
+            zorder=z_test,
         )
         # Set alpha of small validation set to be more visible
         val_alpha = 1
-        z_order = 2
+        z_val = 10
 
     plt.scatter(
         val_true.cpu().numpy(),
@@ -433,7 +447,7 @@ def plot_pred_vs_gt(
         alpha=val_alpha,
         color="tab:orange",
         label="Validation",
-        zorder=z_order,
+        zorder=z_val,
     )
     plt.scatter(
         train_true.cpu().numpy(),
@@ -441,6 +455,7 @@ def plot_pred_vs_gt(
         alpha=0.1,
         color="tab:blue",
         label="Entrainement",
+        zorder=z_train,
     )
 
     plt.plot(

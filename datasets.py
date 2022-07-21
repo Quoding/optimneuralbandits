@@ -37,13 +37,6 @@ class ReplayDataset(Dataset):
         hist, n_bins, list_bin_edges = build_histogram(flat_labels, factor, bin_size)
         weights = hist.hist
 
-        # wplot = weights.cpu().numpy()
-        # plt.bar(list_bin_edges[:-1], wplot, width=0.1, edgecolor="black")
-        # plt.title("Distribution des risques relatifs (discret)")
-        # plt.xlabel("Intervalles (0.1)")
-        # plt.ylabel("Compte")
-        # plt.show()
-
         if reweight == "sqrt_inv":
             weights = torch.sqrt(weights)
 
@@ -55,18 +48,10 @@ class ReplayDataset(Dataset):
 
         # Get weights for dataset
         weight_bins = {list_bin_edges[i]: weights[0][0][i] for i in range(n_bins)}
-        # print(weight_bins)
+
+        # This isn't slow, looping is fast, dictionaries are hashmaps
         weights_per_obs = [weight_bins[risk] for risk in discrete_risks]
 
-        # k = list(weight_bins.keys())
-        # v = list(weight_bins.values())
-        # v = [val.item() for val in v]
-
-        # plt.bar(k, v, width=0.1, edgecolor="black")
-        # plt.title("Poids d'echantillonnage des observations")
-        # plt.xlabel("Intervalles (0.1)")
-        # plt.ylabel("Poids")
-        # plt.show()
         return weights_per_obs
 
 
