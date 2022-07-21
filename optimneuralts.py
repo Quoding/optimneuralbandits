@@ -81,7 +81,7 @@ class DENeuralTSDiag:
         batch_size=-1,
         generator=torch.Generator(device="cuda"),
         patience=25,
-        use_lds=True,
+        lds=True,
     ):
         # For full batch grad descent
         if batch_size == -1:
@@ -96,8 +96,10 @@ class DENeuralTSDiag:
         # Although we're giving the whole dataset, the class is made such that only training examples are used here
         shuffle = True
         sampler = None
-        if use_lds:
-            w = self.train_dataset.get_weights(reweight="sqrt_inv")
+        remainder_is_one = (len(self.train_dataset) % batch_size) == 1
+        if lds:
+            print(lds)
+            w = self.train_dataset.get_weights(reweight=lds)
             sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
             shuffle = False
 
@@ -107,6 +109,7 @@ class DENeuralTSDiag:
             shuffle=shuffle,
             generator=generator,
             sampler=sampler,
+            drop_last=remainder_is_one,
         )
 
         early_stop = EarlyStopping(patience)

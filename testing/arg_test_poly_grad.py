@@ -42,8 +42,11 @@ ci_thresh = args.ci_thresh
 patience = args.patience
 valtype = args.valtype
 batch_norm = not args.nobatchnorm
-use_lds = not args.nolds
+lds = args.lds
 usedecay = args.usedecay
+
+if lds == "True" or lds == "False":
+    lds = lds == "True"
 
 make_deterministic(seed)
 
@@ -106,7 +109,7 @@ agent.val_dataset.set_(X_val, y_val)
 
 logging.info("Warming up...")
 #### WARMUP ####
-agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, use_lds=use_lds)
+agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, lds=lds)
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
 # jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
@@ -133,7 +136,7 @@ for i in range(n_trials):
     agent.train_dataset.add(a_train, r_train)
 
     loss = agent.train(
-        n_epochs, lr=lr, batch_size=batch_size, patience=patience, use_lds=use_lds
+        n_epochs, lr=lr, batch_size=batch_size, patience=patience, lds=lds
     )
     #### COMPUTE METRICS ####
     if (i + 1) % 100 == 0:

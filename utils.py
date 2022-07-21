@@ -408,9 +408,10 @@ def parse_args():
         help="Use batch norm in neural network",
     )
     parser.add_argument(
-        "--nolds",
-        action="store_true",
-        help="Use label distribution smoothing in training",
+        "--lds",
+        default="True",
+        choices=["True", "sqrt_inv", "False"],
+        help="Strategy for label distribution smoothing",
     )
     parser.add_argument(
         "--usedecay",
@@ -438,7 +439,6 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
 
         # Evaluate
         sample_r, g_list, mu, cb = agent.get_sample(input_vec)
-        print(mu)
         # Clear gradient from sampling so backprop is clean
         optimizer.zero_grad()
         agent.net.zero_grad()
