@@ -5,7 +5,7 @@ from copy import deepcopy
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from datasets import ReplayDataset, ValidationReplayDataset
@@ -90,16 +90,25 @@ class DENeuralTSDiag:
         # Setup
         self.len += 1
         weight_decay = self.decay * (self.lambda_ / self.len)
-        optimizer = self.optimizer_class(
-            self.net.parameters(), lr=lr, weight_decay=weight_decay
-        )
-        # Although we're giving the whole dataset, the class is made such that only training examples are used here
+
+        if lr == "plateau":
+            print("using scheduler")
+            optimizer = torch.optim.Adam(
+                self.net.parameters(), lr=0.01, weight_decay=weight_decay
+            )
+            sched = ReduceLROnPlateau(optimizer, "min", patience=patience // 2)
+        else:
+            optimizer = self.optimizer_class(
+                self.net.parameters(), lr=float(lr), weight_decay=weight_decay
+            )
+
         shuffle = True
         sampler = None
         remainder_is_one = (len(self.train_dataset) % batch_size) == 1
         if lds:
             w = self.train_dataset.get_weights(reweight=lds)
             sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
+            # sampler = WeightedRandomSampler(w, num_samples=4096)
             shuffle = False
 
         loader = DataLoader(
@@ -133,6 +142,9 @@ class DENeuralTSDiag:
             )
             self.net.train()
             early_stop(stored_loss, self.net)
+
+            if lr == "plateau":
+                sched.step(stored_loss)
 
             if early_stop.early_stop:
                 break

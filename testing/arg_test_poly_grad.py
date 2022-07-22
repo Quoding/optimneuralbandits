@@ -50,31 +50,18 @@ if lds == "True" or lds == "False":
 
 make_deterministic(seed)
 
+# combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset, "testing/datasets")
 combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
-
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
-
 reward_fn = lambda idx: (
     risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
     risks[idx],
 )
 
 
-class DEConfig:
-    n_step: int = pop_optim_n_steps
-    population_size: int = pop_optim_n_members
-    differential_weight: float = 1
-    crossover_probability: float = 0.9
-    strategy: Strategy = Strategy.best1bin
-    seed: int = "doesn't matter"
-
-
-#### SET UP NETWORK AND DE ####
-de_config = DEConfig
-de_policy = PullPolicy
-net = Network(n_dim, n_hidden_layers, hidden_size=width, batch_norm=batch_norm).to(
-    device
-)
+net = Network(
+    n_dim, n_hidden_layers, n_output=1, hidden_size=width, batch_norm=batch_norm
+).to(device)
 
 #### METRICS ####
 jaccards = []
@@ -111,16 +98,16 @@ logging.info("Warming up...")
 #### WARMUP ####
 agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, lds=lds)
 
-## GET METRICS POST WARMUP, PRE TRAINING ####
-# jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-#     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
-# )
-# logging.info(
-#     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
-# )
-# jaccards.append(jaccard)
-# ratio_apps.append(ratio_app)
-# percent_found_pats.append(percent_found_pat)
+#### GET METRICS POST WARMUP, PRE TRAINING ####
+jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
+    agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+)
+logging.info(
+    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+)
+jaccards.append(jaccard)
+ratio_apps.append(ratio_app)
+percent_found_pats.append(percent_found_pat)
 logging.info("Warm up over. Starting training")
 
 #### TRAINING ####

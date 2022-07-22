@@ -330,7 +330,7 @@ def setup_data(
     training_data = CombiDataset(X_train, y_train, classif_thresh)
     if reweight is not None:
         w = training_data.get_weights(reweight=reweight)
-        sampler = WeightedRandomSampler(w, num_samples=n_obs)
+        sampler = WeightedRandomSampler(w, num_samples=4096)
         trainloader = DataLoader(
             training_data,
             batch_size=batch_size,
@@ -550,12 +550,16 @@ def update_minimums(
     val_activ_mintrain_loss,
     train_activ_mintrain_loss,
     test_activ_mintrain_loss,
+    current_epoch,
+    mintrain_epoch,
+    minval_epoch,
 ):
     # Record all activations on new minimum val loss
     if val_loss < min_val_loss:
         val_activ_min_loss = val_activ.detach().clone().cpu().numpy()
         train_activ_min_loss = train_activ.detach().clone().cpu().numpy()
         min_val_loss = val_loss
+        minval_epoch = current_epoch
         if test_loss is not None and test_activ is not None:
             test_activ_min_loss = test_activ.detach().clone().cpu().numpy()
 
@@ -564,6 +568,7 @@ def update_minimums(
         val_activ_mintrain_loss = val_activ.detach().clone().cpu().numpy()
         train_activ_mintrain_loss = train_activ.detach().clone().cpu().numpy()
         min_train_loss = train_loss
+        mintrain_epoch = current_epoch
         if test_loss is not None and test_activ is not None:
             test_activ_mintrain_loss = test_activ.detach().clone().cpu().numpy()
     return (
@@ -575,4 +580,6 @@ def update_minimums(
         val_activ_mintrain_loss,
         test_activ_mintrain_loss,
         min_train_loss,
+        mintrain_epoch,
+        minval_epoch,
     )

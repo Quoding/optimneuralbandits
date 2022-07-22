@@ -321,8 +321,7 @@ def parse_args():
     )
     parser.add_argument(
         "--lr",
-        type=float,
-        default=1e-3,
+        default=1e-2,
         help="Learning rate for SGD / Adam optimizer",
     )
 
