@@ -110,8 +110,10 @@ ratio_apps.append(ratio_app)
 percent_found_pats.append(percent_found_pat)
 logging.info("Warm up over. Starting training")
 
+
 #### TRAINING ####
 for i in range(n_trials):
+    print(i)
     a_t, idx, best_member_grad = do_gradient_optim(
         agent, pop_optim_n_members, combis, lr=pop_optim_lr
     )

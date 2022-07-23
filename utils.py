@@ -14,9 +14,12 @@ from detorch import DE, Policy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
 
-device = torch.device("cuda")
+device = torch.device("cpu")
+# device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if device == torch.device("cuda"):
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
+
 logging.basicConfig(level=logging.INFO)
-torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
 
 class PullPolicy(Policy):

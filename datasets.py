@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.nn.functional import conv1d
-from utils import discretize_targets, build_histogram, gaussian_fn
+from utils import discretize_targets, build_histogram, gaussian_fn, device
 
 
 class ReplayDataset(Dataset):
@@ -43,7 +43,9 @@ class ReplayDataset(Dataset):
         # Apply label distribution smoothing with gaussian filter
         # Get the gaussian filter
         kernel = gaussian_fn(kern_size, kern_sigma)[None, None]
-        weights = conv1d(weights[None, None].cuda(), kernel, padding=(kern_size // 2))
+        weights = conv1d(
+            weights[None, None].to(device), kernel, padding=(kern_size // 2)
+        )
         weights = 1 / weights
 
         # Get weights for dataset

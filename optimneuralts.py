@@ -9,7 +9,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from datasets import ReplayDataset, ValidationReplayDataset
-from utils import EarlyStopping, get_model_selection_loss
+from utils import EarlyStopping, get_model_selection_loss, device
 
 logging.basicConfig(level=logging.INFO)
 
@@ -32,7 +32,7 @@ class DENeuralTSDiag:
             p.numel() for p in self.net.parameters() if p.requires_grad
         )
         self.len = 0
-        self.U = lambda_ * torch.ones((self.total_param,)).cuda()
+        self.U = lambda_ * torch.ones((self.total_param,))
         self.nu = nu
         self.style = style
         self.sampletype = sampletype
@@ -79,9 +79,8 @@ class DENeuralTSDiag:
         n_epochs,
         lr=1e-2,
         batch_size=-1,
-        generator=torch.Generator(device="cuda"),
         patience=25,
-        lds=True,
+        lds="sqrt_inv",
     ):
         # For full batch grad descent
         if batch_size == -1:
@@ -115,9 +114,10 @@ class DENeuralTSDiag:
             self.train_dataset,
             batch_size=batch_size,
             shuffle=shuffle,
-            generator=generator,
+            generator=torch.Generator(device=device),
             sampler=sampler,
             drop_last=remainder_is_one,
+            num_workers=8,
         )
 
         early_stop = EarlyStopping(patience)
