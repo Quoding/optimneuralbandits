@@ -117,7 +117,7 @@ class DENeuralTSDiag:
             generator=torch.Generator(device=device),
             sampler=sampler,
             drop_last=remainder_is_one,
-            num_workers=8,
+            num_workers=8 * (device == torch.device("cpu")),
         )
 
         early_stop = EarlyStopping(patience)
