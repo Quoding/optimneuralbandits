@@ -84,7 +84,7 @@ class EarlyStopping:
 
     def store(self, model):
         self.best_model = deepcopy(model)
-        self.best_model.zero_grad()
+        self.best_model.zero_grad(set_to_none=True)
 
     @property
     def early_stop(self):
@@ -425,7 +425,8 @@ def parse_args():
 
 def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # Generate a random vector to optimize
-    input_vec = torch.randint(0, 2, size=(1, existing_vecs.shape[1])).float()
+    sample_idx = random.randint(0, len(existing_vecs))
+    input_vec = existing_vecs[sample_idx][None]
     input_vec.requires_grad = True
     optimizer = torch.optim.Adam([input_vec], lr=lr)
 
@@ -435,14 +436,14 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
     for i in range(n_steps):
         # Clear gradients for sample
-        optimizer.zero_grad()
-        agent.net.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
+        agent.net.zero_grad(set_to_none=True)
 
         # Evaluate
         sample_r, g_list, mu, cb = agent.get_sample(input_vec)
         # Clear gradient from sampling so backprop is clean
-        optimizer.zero_grad()
-        agent.net.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
+        agent.net.zero_grad(set_to_none=True)
 
         # Record input_vecs and values in the population
         population_values.append(sample_r.item())
@@ -457,16 +458,16 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
         population = torch.cat((population, input_vec.detach().clone()))
 
     # Clear gradients for sample
-    optimizer.zero_grad()
-    agent.net.zero_grad()
+    optimizer.zero_grad(set_to_none=True)
+    agent.net.zero_grad(set_to_none=True)
     # Record final optimized input_vecs in population since they're the last optimizer steps product
     sample_r, g_list, mu, cb = agent.get_sample(input_vec)
 
     population_values.append(sample_r.item())
 
     # Clean up grad before exiting
-    optimizer.zero_grad()
-
+    optimizer.zero_grad(set_to_none=True)
+    agent.net.zero_grad(set_to_none=True)
     population_values = torch.tensor(population_values)
 
     # Find the best generated vector
@@ -612,7 +613,7 @@ def gaussian_fn(size, std):
 
 
 def get_model_selection_loss(net, dataset, loss_fn):
-    X_val, y_val = dataset.features, dataset.rewards
+    X_val, y_val = dataset.features.to(device), dataset.rewards.to(device)
     with torch.no_grad():
         pred = net(X_val)
         loss = loss_fn(pred, y_val)

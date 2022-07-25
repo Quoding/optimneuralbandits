@@ -6,6 +6,8 @@ from utils import discretize_targets, build_histogram, gaussian_fn, device
 
 
 class ReplayDataset(Dataset):
+    """CPU Dataset for replay buffer examples"""
+
     def __init__(self, features=None, rewards=None):
         self.features = features
         self.rewards = rewards
@@ -35,29 +37,29 @@ class ReplayDataset(Dataset):
         discrete_risks = discretize_targets(flat_labels, factor)
 
         hist, n_bins, list_bin_edges = build_histogram(flat_labels, factor, bin_size)
-        weights = hist.hist
+        weights = hist.hist.to(device)
 
         if reweight == "sqrt_inv":
             weights = torch.sqrt(weights)
 
         # Apply label distribution smoothing with gaussian filter
         # Get the gaussian filter
+
         kernel = gaussian_fn(kern_size, kern_sigma)[None, None]
-        weights = conv1d(
-            weights[None, None].to(device), kernel, padding=(kern_size // 2)
-        )
+        weights = conv1d(weights[None, None], kernel, padding=(kern_size // 2))
         weights = 1 / weights
 
         # Get weights for dataset
         weight_bins = {list_bin_edges[i]: weights[0][0][i] for i in range(n_bins)}
 
         # This isn't slow, looping is fast, dictionaries are hashmaps
-        weights_per_obs = [weight_bins[risk] for risk in discrete_risks]
-
+        weights_per_obs = torch.tensor([weight_bins[risk] for risk in discrete_risks])
         return weights_per_obs
 
 
 class ValidationReplayDataset(ReplayDataset):
+    """GPU Dataset for validation during training"""
+
     def __init__(self, features=None, rewards=None, valtype=None):
         self.features = None
         self.rewards = None
@@ -84,6 +86,7 @@ class ValidationReplayDataset(ReplayDataset):
         return len(self.rewards)
 
     def set_(self, features_2d, rewards_2d):
+        # Set to device right away because we don't use these datapoints in a dataloader in anyway. Doing this avoids repeatedly sending to device
         self.features = features_2d
         self.rewards = rewards_2d
 
@@ -92,20 +95,21 @@ class ValidationReplayDataset(ReplayDataset):
 
     def update(self, features, reward):
         to_training = (features, reward)
+        # to_training = (features.cpu(), reward.cpu())
         if self.valtype == "extrema":
             # If valtype is extrema, then the set is composed of only 2 observations, the min and max of rewards
             # Assumes sorted tensors based on self.rewards
             if reward < min(self.rewards):
                 to_training = (
-                    self.features[0].clone().unsqueeze(0),
-                    self.rewards[0].clone().unsqueeze(0),
+                    self.features[0].clone().unsqueeze(0).cpu(),
+                    self.rewards[0].clone().unsqueeze(0).cpu(),
                 )
                 self.features[0] = features[0]
                 self.rewards[0] = reward[0]
-            elif reward > max(self.rewards):
+            elif reward.item() < min(self.rewards).item():
                 to_training = (
-                    self.features[1].clone().unsqueeze(0),
-                    self.rewards[1].clone().unsqueeze(0),
+                    self.features[1].clone().unsqueeze(0).cpu(),
+                    self.rewards[1].clone().unsqueeze(0).cpu(),
                 )
                 self.features[1] = features[0]
                 self.rewards[1] = reward[0]
@@ -115,8 +119,8 @@ class ValidationReplayDataset(ReplayDataset):
             new_obs_bin = int(reward * 10) / 10
             # Send the observation that was already in the bin to the training set
             to_training = (
-                self.bins_features.get(new_obs_bin, None),
-                self.bins_rewards.get(new_obs_bin, None),
+                self.bins_features.get(new_obs_bin.cpu(), None),
+                self.bins_rewards.get(new_obs_bin.cpu(), None),
             )
             # Update the bin
             self.bins_features[new_obs_bin] = features

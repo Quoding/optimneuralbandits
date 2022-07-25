@@ -92,13 +92,15 @@ vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas
 X_train, y_train, X_val, y_val = get_data_splits(vecs, rewards, valtype=valtype)
 
 agent.train_dataset.set_(X_train, y_train)
-agent.val_dataset.set_(X_val, y_val)
+if valtype != "noval":
+    agent.val_dataset.set_(X_val, y_val)
+
 
 logging.info("Warming up...")
 #### WARMUP ####
 agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, lds=lds)
 
-#### GET METRICS POST WARMUP, PRE TRAINING ####
+### GET METRICS POST WARMUP, PRE TRAINING ####
 jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
 )

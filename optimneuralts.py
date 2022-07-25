@@ -1,7 +1,7 @@
 import logging
 import types
 from copy import deepcopy
-
+import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -12,6 +12,9 @@ from datasets import ReplayDataset, ValidationReplayDataset
 from utils import EarlyStopping, get_model_selection_loss, device
 
 logging.basicConfig(level=logging.INFO)
+
+
+num_cpus = len(os.sched_getaffinity(0))
 
 
 class DENeuralTSDiag:
@@ -32,7 +35,7 @@ class DENeuralTSDiag:
             p.numel() for p in self.net.parameters() if p.requires_grad
         )
         self.len = 0
-        self.U = lambda_ * torch.ones((self.total_param,))
+        self.U = lambda_ * torch.ones((self.total_param,)).to(device)
         self.nu = nu
         self.style = style
         self.sampletype = sampletype
@@ -48,7 +51,7 @@ class DENeuralTSDiag:
         self.optimizer_class = optimizers[optim_string]
 
     def compute_activation_and_grad(self, vec):
-        self.net.zero_grad()
+        self.net.zero_grad(set_to_none=True)
         mu = self.net(vec)
         mu.backward(retain_graph=True)
         g_list = torch.cat([p.grad.flatten() for p in self.net.parameters()])
@@ -106,18 +109,19 @@ class DENeuralTSDiag:
         remainder_is_one = (len(self.train_dataset) % batch_size) == 1
         if lds:
             w = self.train_dataset.get_weights(reweight=lds)
-            sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
-            # sampler = WeightedRandomSampler(w, num_samples=4096)
+            # sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
+            sampler = WeightedRandomSampler(w, num_samples=4096)
             shuffle = False
 
         loader = DataLoader(
             self.train_dataset,
             batch_size=batch_size,
             shuffle=shuffle,
-            generator=torch.Generator(device=device),
             sampler=sampler,
+            generator=torch.Generator(device=device),
             drop_last=remainder_is_one,
-            num_workers=8 * (device == torch.device("cpu")),
+            # num_workers=num_cpus,
+            # pin_memory=True,
         )
 
         early_stop = EarlyStopping(patience)
@@ -130,7 +134,7 @@ class DENeuralTSDiag:
         # Train loop
         for _ in range(n_epochs):
             for X, y in loader:
-                optimizer.zero_grad()
+                optimizer.zero_grad(set_to_none=True)
                 pred = self.net(X)
                 loss = self.loss_func(pred, y)
                 loss.backward()
@@ -149,7 +153,7 @@ class DENeuralTSDiag:
             if early_stop.early_stop:
                 break
 
-        optimizer.zero_grad()
+        optimizer.zero_grad(set_to_none=True)
 
         # Set the net to the best in model selection loss we've seen
         # Deep copy to ensure no remaining references to the early_stop object
@@ -208,7 +212,7 @@ class LenientDENeuralTSDiag(DENeuralTSDiag):
         if mu.item() > self.reward_sample_thresholds[1]:
             sample_r = mu
         else:
-            sample_r = torch.cuda.FloatTensor([0])
+            sample_r = torch.tensor([0])
             torch.nn.init.trunc_normal_(
                 sample_r, mu.view(-1), sigma.view(-1), *self.reward_sample_thresholds
             )
