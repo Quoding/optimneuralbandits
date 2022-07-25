@@ -103,12 +103,14 @@ logging.info("Warm up over. Computing metrics...")
 
 ### VISUALIZE REPRESENTATION AFTER WARMUP ###
 # import matplotlib.pyplot as plt
+
 # with torch.no_grad():
-#     plt.scatter(y_train.cpu().numpy(), agent.net(X_train).cpu().numpy())
+#     plt.scatter(risks.cpu().numpy(), agent.net(combis).cpu().numpy())
 #     plt.plot([0, 4], [0, 4], color="black", linestyle="dashed")
 #     plt.xlim(0, 4)
 #     plt.ylim(0, 4)
 #     plt.show()
+
 ### GET METRICS POST WARMUP, PRE TRAINING ####
 jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
