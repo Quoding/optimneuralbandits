@@ -35,7 +35,7 @@ class DENeuralTSDiag:
             p.numel() for p in self.net.parameters() if p.requires_grad
         )
         self.len = 0
-        self.U = lambda_ * torch.ones((self.total_param,)).to(device)
+        self.U = lambda_ * torch.ones((self.total_param,))
         self.nu = nu
         self.style = style
         self.sampletype = sampletype
@@ -94,7 +94,6 @@ class DENeuralTSDiag:
         weight_decay = self.decay * (self.lambda_ / self.len)
 
         if lr == "plateau":
-            print("using scheduler")
             optimizer = torch.optim.Adam(
                 self.net.parameters(), lr=0.01, weight_decay=weight_decay
             )

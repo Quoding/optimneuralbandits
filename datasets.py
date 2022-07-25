@@ -6,8 +6,6 @@ from utils import discretize_targets, build_histogram, gaussian_fn, device
 
 
 class ReplayDataset(Dataset):
-    """CPU Dataset for replay buffer examples"""
-
     def __init__(self, features=None, rewards=None):
         self.features = features
         self.rewards = rewards
@@ -58,8 +56,6 @@ class ReplayDataset(Dataset):
 
 
 class ValidationReplayDataset(ReplayDataset):
-    """GPU Dataset for validation during training"""
-
     def __init__(self, features=None, rewards=None, valtype=None):
         self.features = None
         self.rewards = None
@@ -95,21 +91,20 @@ class ValidationReplayDataset(ReplayDataset):
 
     def update(self, features, reward):
         to_training = (features, reward)
-        # to_training = (features.cpu(), reward.cpu())
         if self.valtype == "extrema":
             # If valtype is extrema, then the set is composed of only 2 observations, the min and max of rewards
             # Assumes sorted tensors based on self.rewards
             if reward < min(self.rewards):
                 to_training = (
-                    self.features[0].clone().unsqueeze(0).cpu(),
-                    self.rewards[0].clone().unsqueeze(0).cpu(),
+                    self.features[0].clone().unsqueeze(0),
+                    self.rewards[0].clone().unsqueeze(0),
                 )
                 self.features[0] = features[0]
                 self.rewards[0] = reward[0]
             elif reward.item() < min(self.rewards).item():
                 to_training = (
-                    self.features[1].clone().unsqueeze(0).cpu(),
-                    self.rewards[1].clone().unsqueeze(0).cpu(),
+                    self.features[1].clone().unsqueeze(0),
+                    self.rewards[1].clone().unsqueeze(0),
                 )
                 self.features[1] = features[0]
                 self.rewards[1] = reward[0]
@@ -119,8 +114,8 @@ class ValidationReplayDataset(ReplayDataset):
             new_obs_bin = int(reward * 10) / 10
             # Send the observation that was already in the bin to the training set
             to_training = (
-                self.bins_features.get(new_obs_bin.cpu(), None),
-                self.bins_rewards.get(new_obs_bin.cpu(), None),
+                self.bins_features.get(new_obs_bin, None),
+                self.bins_rewards.get(new_obs_bin, None),
             )
             # Update the bin
             self.bins_features[new_obs_bin] = features
