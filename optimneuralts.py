@@ -84,11 +84,13 @@ class DENeuralTSDiag:
         batch_size=-1,
         patience=25,
         lds="sqrt_inv",
+        n_train=-1,
     ):
         # For full batch grad descent
         if batch_size == -1:
             batch_size = len(self.train_dataset)
-
+        if n_train == -1:
+            n_train = len(self.train_dataset)
         # Setup
         self.len += 1
         weight_decay = self.decay * (self.lambda_ / self.len)
@@ -108,8 +110,11 @@ class DENeuralTSDiag:
         remainder_is_one = (len(self.train_dataset) % batch_size) == 1
         if lds:
             w = self.train_dataset.get_weights(reweight=lds)
-            sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
-            # sampler = WeightedRandomSampler(w, num_samples=4096)
+            sampler = WeightedRandomSampler(
+                w,
+                num_samples=n_train,
+                generator=torch.Generator(device=device),
+            )
             shuffle = False
 
         loader = DataLoader(
@@ -119,8 +124,6 @@ class DENeuralTSDiag:
             sampler=sampler,
             generator=torch.Generator(device=device),
             drop_last=remainder_is_one,
-            # num_workers=num_cpus,
-            # pin_memory=True,
         )
 
         early_stop = EarlyStopping(patience)

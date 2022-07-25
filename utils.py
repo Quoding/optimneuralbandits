@@ -419,6 +419,14 @@ def parse_args():
         action="store_true",
         help="Use weight decay during training",
     )
+
+    parser.add_argument(
+        "--ntrain",
+        type=int,
+        default=-1,
+        help="Number of samples to take during training. Can help if there are enough observations to notice a slow down of the training.",
+    )
+
     args = parser.parse_args()
     return args
 
