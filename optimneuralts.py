@@ -109,8 +109,8 @@ class DENeuralTSDiag:
         remainder_is_one = (len(self.train_dataset) % batch_size) == 1
         if lds:
             w = self.train_dataset.get_weights(reweight=lds)
-            # sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
-            sampler = WeightedRandomSampler(w, num_samples=4096)
+            sampler = WeightedRandomSampler(w, num_samples=len(self.train_dataset))
+            # sampler = WeightedRandomSampler(w, num_samples=4096)
             shuffle = False
 
         loader = DataLoader(

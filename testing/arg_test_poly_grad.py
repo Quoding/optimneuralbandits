@@ -99,7 +99,16 @@ if valtype != "noval":
 logging.info("Warming up...")
 #### WARMUP ####
 agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, lds=lds)
+logging.info("Warm up over. Computing metrics...")
 
+### VISUALIZE REPRESENTATION AFTER WARMUP ###
+# import matplotlib.pyplot as plt
+# with torch.no_grad():
+#     plt.scatter(y_train.cpu().numpy(), agent.net(X_train).cpu().numpy())
+#     plt.plot([0, 4], [0, 4], color="black", linestyle="dashed")
+#     plt.xlim(0, 4)
+#     plt.ylim(0, 4)
+#     plt.show()
 ### GET METRICS POST WARMUP, PRE TRAINING ####
 jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
@@ -110,7 +119,7 @@ logging.info(
 jaccards.append(jaccard)
 ratio_apps.append(ratio_app)
 percent_found_pats.append(percent_found_pat)
-logging.info("Warm up over. Starting training")
+logging.info("Post warmup metrics over. Starting training")
 
 
 #### TRAINING ####
