@@ -489,6 +489,7 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # print(best_vec)
     # print(a_t)
     # input()
+    agent.net.train()
     return a_t, idx, g_list
 
 
