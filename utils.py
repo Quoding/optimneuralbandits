@@ -427,6 +427,13 @@ def parse_args():
         help="Number of samples to take during training. Can help if there are enough observations to notice a slow down of the training.",
     )
 
+    parser.add_argument(
+        "--train_every",
+        type=int,
+        default=1,
+        help="Number of timesteps to play before retraining",
+    )
+
     args = parser.parse_args()
     return args
 
