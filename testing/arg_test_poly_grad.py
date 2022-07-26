@@ -148,7 +148,7 @@ for i in range(n_trials):
     a_train, r_train = agent.val_dataset.update(a_t, r_t)
     agent.train_dataset.add(a_train, r_train)
 
-    if i % train_every == 0:
+    if (i + 1) % train_every == 0:
         loss = agent.train(
             n_epochs,
             lr=lr,
