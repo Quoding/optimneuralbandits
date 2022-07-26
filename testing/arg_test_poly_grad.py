@@ -6,14 +6,13 @@ import os
 import numpy as np
 import pandas as pd
 import torch
-from sklearn.model_selection import train_test_split
-from detorch import Strategy
 
 sys.path.append("..")
 from utils import *
 from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
 from networks import Network
 
+torch.set_num_threads(num_cpus)
 
 #### SET UP ####
 args = parse_args()
@@ -43,7 +42,9 @@ patience = args.patience
 valtype = args.valtype
 batch_norm = not args.nobatchnorm
 lds = args.lds
-usedecay = args.usedecay
+use_decay = args.usedecay
+n_train = args.ntrain
+train_every = args.train_every
 
 if lds == "True" or lds == "False":
     lds = lds == "True"
@@ -53,12 +54,15 @@ make_deterministic(seed)
 # combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset, "testing/datasets")
 combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
+# reward_fn = lambda idx: (
+#     risks[idx],
+#     risks[idx],
+# )
+
 reward_fn = lambda idx: (
     risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
     risks[idx],
 )
-
-
 net = Network(
     n_dim, n_hidden_layers, n_output=1, hidden_size=width, batch_norm=batch_norm
 ).to(device)
@@ -84,7 +88,7 @@ agent = DENeuralTSDiag(
     lambda_=reg,
     style=style,
     valtype=valtype,
-    decay=usedecay,
+    use_decay=use_decay,
 )
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
@@ -98,10 +102,18 @@ if valtype != "noval":
 
 logging.info("Warming up...")
 #### WARMUP ####
-agent.train(n_epochs, lr=lr, batch_size=batch_size, patience=patience, lds=lds)
+for i in range(50):
+    agent.train(
+        n_epochs,
+        lr=lr,
+        batch_size=batch_size,
+        patience=patience,
+        lds=lds,
+        n_train=n_train,
+    )
 logging.info("Warm up over. Computing metrics...")
 
-### VISUALIZE REPRESENTATION AFTER WARMUP ###
+## VISUALIZE REPRESENTATION AFTER WARMUP ###
 # import matplotlib.pyplot as plt
 
 # with torch.no_grad():
@@ -110,8 +122,7 @@ logging.info("Warm up over. Computing metrics...")
 #     plt.xlim(0, 4)
 #     plt.ylim(0, 4)
 #     plt.show()
-
-### GET METRICS POST WARMUP, PRE TRAINING ####
+## GET METRICS POST WARMUP, PRE TRAINING ####
 jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
 )
@@ -137,11 +148,17 @@ for i in range(n_trials):
     a_train, r_train = agent.val_dataset.update(a_t, r_t)
     agent.train_dataset.add(a_train, r_train)
 
-    loss = agent.train(
-        n_epochs, lr=lr, batch_size=batch_size, patience=patience, lds=lds
-    )
+    if i % train_every == 0:
+        loss = agent.train(
+            n_epochs,
+            lr=lr,
+            batch_size=batch_size,
+            patience=patience,
+            lds=lds,
+            n_train=n_train,
+        )
     #### COMPUTE METRICS ####
-    if (i + 1) % 100 == 0:
+    if (i + 1) % 200 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
             agent, combis, thresh, pat_vecs, true_sol, n_sigmas
         )
@@ -159,7 +176,6 @@ for i in range(n_trials):
         logging.info(
             f"trial: {i + 1}, jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
         )
-
 output_dir = args.output
 l = ["agents", "jaccards", "ratio_apps", "ratio_found_pats", "losses", "dataset_losses"]
 for item in l:
