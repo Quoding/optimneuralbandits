@@ -460,7 +460,8 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
 
         # Evaluate
         sample_r, g_list, mu, cb = agent.get_sample(input_vec)
-        # Clear gradient from sampling so backprop is clean
+
+        # Clear gradient from sampling because a backprop happens in there
         optimizer.zero_grad(set_to_none=True)
         agent.net.zero_grad(set_to_none=True)
 

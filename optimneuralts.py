@@ -174,7 +174,12 @@ class DENeuralTSDiag:
         mus = []
         sigmas = []
         self.net.eval()
-        for vec in vecs:
+        # First pass, weed out vectors with small activs so we don't waste time in the loop to extract solutions
+        activs = self.net(vecs)
+        possible_solution_vecs_idx = torch.where(activs > thresh)[0]
+        possible_solution_vecs = vecs[possible_solution_vecs_idx]
+
+        for vec in possible_solution_vecs:
             mu, g_list = self.compute_activation_and_grad(vec[None])
             sigma = torch.sum(g_list * g_list / self.U)
             sigma = torch.sqrt(self.lambda_ * sigma)
