@@ -1,7 +1,6 @@
 import logging
 import types
 from copy import deepcopy
-import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -9,13 +8,9 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from datasets import ReplayDataset, ValidationReplayDataset
-from utils import EarlyStopping, get_model_selection_loss, device
+from utils import EarlyStopping, get_model_selection_loss, device, num_cpus, using_cpu
 
 logging.basicConfig(level=logging.INFO)
-
-
-num_cpus = len(os.sched_getaffinity(0))
-using_cpu = device == torch.device("cpu")
 
 
 class DENeuralTSDiag:

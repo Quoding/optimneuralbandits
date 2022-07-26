@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import logging
 import random
 from copy import deepcopy
@@ -17,6 +18,9 @@ from scipy.stats.contingency import relative_risk
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if device == torch.device("cuda"):
     torch.set_default_tensor_type("torch.cuda.FloatTensor")
+
+num_cpus = len(os.sched_getaffinity(0))
+using_cpu = device == torch.device("cpu")
 
 logging.basicConfig(level=logging.INFO)
 

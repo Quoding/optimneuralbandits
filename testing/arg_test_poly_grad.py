@@ -121,6 +121,7 @@ logging.info("Warm up over. Computing metrics...")
 #     plt.xlim(0, 4)
 #     plt.ylim(0, 4)
 #     plt.show()
+
 ## GET METRICS POST WARMUP, PRE TRAINING ####
 jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
