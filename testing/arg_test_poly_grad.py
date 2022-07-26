@@ -102,15 +102,14 @@ if valtype != "noval":
 
 logging.info("Warming up...")
 #### WARMUP ####
-for i in range(50):
-    agent.train(
-        n_epochs,
-        lr=lr,
-        batch_size=batch_size,
-        patience=patience,
-        lds=lds,
-        n_train=n_train,
-    )
+agent.train(
+    n_epochs,
+    lr=lr,
+    batch_size=batch_size,
+    patience=patience,
+    lds=lds,
+    n_train=n_train,
+)
 logging.info("Warm up over. Computing metrics...")
 
 ## VISUALIZE REPRESENTATION AFTER WARMUP ###
