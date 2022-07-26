@@ -323,7 +323,7 @@ def parse_args():
     )
     parser.add_argument(
         "--lr",
-        default=1e-2,
+        default=0.01,
         help="Learning rate for SGD / Adam optimizer",
     )
 
@@ -434,7 +434,7 @@ def parse_args():
 def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # Generate a random vector to optimize
     sample_idx = random.randint(0, len(existing_vecs))
-    input_vec = existing_vecs[sample_idx][None]
+    input_vec = existing_vecs[sample_idx][None].clone()
     input_vec.requires_grad = True
     optimizer = torch.optim.Adam([input_vec], lr=lr)
 
