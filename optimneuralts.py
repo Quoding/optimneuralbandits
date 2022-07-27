@@ -191,7 +191,6 @@ class DENeuralTSDiag:
             solution = torch.stack(solution)
         else:
             solution = torch.tensor([])
-        self.net.train()
 
         return (solution, mus, sigmas)
 

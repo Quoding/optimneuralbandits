@@ -101,10 +101,12 @@ if valtype != "noval":
 
 logging.info("Warming up...")
 #### WARMUP ####
+agent.net.eval()
 for vec in agent.train_dataset.features:
-    activ, grad = agent.compute_activation_and_grad(vec)
+    activ, grad = agent.compute_activation_and_grad(vec[None])
     agent.U += grad * grad
 
+agent.net.train()
 agent.train(
     n_epochs,
     lr=lr,
@@ -114,6 +116,7 @@ agent.train(
     n_train=n_train,
     use_decay=use_decay,
 )
+agent.net.eval()
 
 
 logging.info("Warm up over. Computing metrics...")
@@ -142,9 +145,7 @@ logging.info("Post warmup metrics over. Starting training")
 
 
 #### TRAINING ####
-agent.net.eval()
 for i in range(n_trials):
-    print(i)
     a_t, idx, best_member_grad = do_gradient_optim(
         agent, pop_optim_n_members, combis, lr=pop_optim_lr
     )

@@ -120,8 +120,8 @@ agent.net.eval()
 for vec in agent.train_dataset.features:
     activ, grad = agent.compute_activation_and_grad(vec[None])
     agent.U += grad * grad
-agent.net.train()
 
+agent.net.train()
 agent.train(
     n_epochs,
     lr=lr,
@@ -131,6 +131,7 @@ agent.train(
     n_train=n_train,
     use_decay=use_decay,
 )
+agent.net.eval()
 
 
 logging.info("Warm up over. Computing metrics...")
@@ -146,22 +147,20 @@ logging.info("Warm up over. Computing metrics...")
 #     plt.show()
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
-# jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-#     agent, combis, thresh, pat_vecs, true_sol, n_sigmas
-# )
-# logging.info(
-#     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
-# )
-# jaccards.append(jaccard)
-# ratio_apps.append(ratio_app)
-# percent_found_pats.append(percent_found_pat)
+jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
+    agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+)
+logging.info(
+    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+)
+jaccards.append(jaccard)
+ratio_apps.append(ratio_app)
+percent_found_pats.append(percent_found_pat)
 logging.info("Post warmup metrics over. Starting training")
 
 
 #### TRAINING ####
-agent.net.eval()
 for i in range(n_trials):
-    print(i)
     best_member = find_best_member(
         agent.get_sample, de_config, init_probas, combis, i, ci_thresh, thresh, n_sigmas
     )
