@@ -57,12 +57,12 @@ class PullPolicy(Policy):
         """Evaluate current `self` (a tensor)
         to find its value according to `eval_fn`"""
         self.transform()
-        sample_r, activation_grad, mu, cb = self.eval_fn(self.params.data)
+        sample_r, activation_grad, mu, cb = self.eval_fn(self.params.data[None])
         self.activation_grad = activation_grad
         self.sample_r = sample_r.detach().item()
         self.mu = mu
         self.cb = cb
-        self.lower_ci_under_thresh = (mu - 3 * cb) <= self.thresh
+        self.lower_ci_under_thresh = (mu - self.n_sigmas * cb) <= self.thresh
         return self.sample_r
 
     def transform(self):
@@ -199,7 +199,7 @@ def find_best_member(
         seed (int): seed to set up DE
         ci_thresh (bool): if True, forces reward sorting to get the best member which has a lower ci intersecting with threshold.
         thresh (float): threshold for CI intersection. If ci_thresh = True, then this must be set to a real number.
-        n_sigmas_conf (float): Number of sigmas to consider for confidence (sigma-rule) around network activation (mu)
+        n_sigmas_conf (float): Number of sigmas to consider for confidence (sigma-rule) around network activation (mu).Used for stopping exploitation of a known good arm.
     Returns:
         torch.Tensor: Best member from DE's population
     """
@@ -446,13 +446,11 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # Generate a random vector to optimize
     sample_idx = random.randint(0, len(existing_vecs))
     input_vec = existing_vecs[sample_idx][None].clone()
-    print(input_vec)
     input_vec.requires_grad = True
     optimizer = torch.optim.Adam([input_vec], lr=lr)
 
     population = input_vec.detach().clone()
     population_values = []
-    agent.net.eval()
     # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
     for i in range(n_steps):
         # Clear gradients for sample
@@ -461,7 +459,6 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
 
         # Evaluate
         sample_r, g_list, mu, cb = agent.get_sample(input_vec)
-
         # Clear gradient from sampling because a backprop happens in there
         optimizer.zero_grad(set_to_none=True)
         agent.net.zero_grad(set_to_none=True)
@@ -472,9 +469,9 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
         # Backprop
         sample_r = -sample_r
         sample_r.backward()
-        # print(agent.net.model[0].weight.grad)
+        # print(agent.net.fc1.weight.grad)
         # input()
-        # optimizer.step()
+        optimizer.step()
 
         population = torch.cat((population, input_vec.detach().clone()))
 
@@ -502,7 +499,6 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # print(best_vec)
     # print(a_t)
     # input()
-    agent.net.train()
     return a_t, idx, g_list
 
 
