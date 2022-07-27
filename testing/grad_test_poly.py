@@ -88,7 +88,6 @@ agent = DENeuralTSDiag(
     lambda_=reg,
     style=style,
     valtype=valtype,
-    use_decay=use_decay,
 )
 
 vecs, rewards = gen_warmup_vecs_and_rewards(n_warmup, combis, risks, init_probas)
@@ -102,6 +101,10 @@ if valtype != "noval":
 
 logging.info("Warming up...")
 #### WARMUP ####
+for vec in agent.train_dataset.features:
+    activ, grad = agent.compute_activation_and_grad(vec)
+    agent.U += grad * grad
+
 agent.train(
     n_epochs,
     lr=lr,
@@ -109,7 +112,10 @@ agent.train(
     patience=patience,
     lds=lds,
     n_train=n_train,
+    use_decay=use_decay,
 )
+
+
 logging.info("Warm up over. Computing metrics...")
 
 ## VISUALIZE REPRESENTATION AFTER WARMUP ###
@@ -136,6 +142,7 @@ logging.info("Post warmup metrics over. Starting training")
 
 
 #### TRAINING ####
+agent.net.eval()
 for i in range(n_trials):
     print(i)
     a_t, idx, best_member_grad = do_gradient_optim(
@@ -149,6 +156,7 @@ for i in range(n_trials):
     agent.train_dataset.add(a_train, r_train)
 
     if (i + 1) % train_every == 0:
+        agent.net.train()
         loss = agent.train(
             n_epochs,
             lr=lr,
@@ -156,7 +164,9 @@ for i in range(n_trials):
             patience=patience,
             lds=lds,
             n_train=n_train,
+            use_decay=use_decay,
         )
+        agent.net.eval()
     #### COMPUTE METRICS ####
     if (i + 1) % 200 == 0:
         jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
