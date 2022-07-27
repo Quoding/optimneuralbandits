@@ -22,7 +22,6 @@ class DENeuralTSDiag:
         nu=1,
         style="ts",
         sampletype="r",
-        use_decay=False,
         valtype="noval",
     ):
         self.net = net
@@ -35,7 +34,6 @@ class DENeuralTSDiag:
         self.nu = nu
         self.style = style
         self.sampletype = sampletype
-        self.use_decay = use_decay
 
         self.loss_func = nn.MSELoss()
         self.train_dataset = ReplayDataset()
@@ -79,6 +77,7 @@ class DENeuralTSDiag:
         patience=25,
         lds="sqrt_inv",
         n_train=-1,
+        use_decay=False,
     ):
         n_dataset = len(self.train_dataset)
         # For full batch grad descent
@@ -88,7 +87,7 @@ class DENeuralTSDiag:
             n_train = n_dataset
         # Setup
         self.len += 1
-        weight_decay = self.use_decay * (self.lambda_ / self.len)
+        weight_decay = use_decay * (self.lambda_ / self.len)
 
         if lr == "plateau":
             optimizer = torch.optim.Adam(
@@ -173,7 +172,6 @@ class DENeuralTSDiag:
         solution = []
         mus = []
         sigmas = []
-        self.net.eval()
         # First pass, weed out vectors with small activs so we don't waste time in the loop to extract solutions
         activs = self.net(vecs)
         possible_solution_vecs_idx = torch.where(activs > thresh)[0]
