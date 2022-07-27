@@ -446,6 +446,7 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # Generate a random vector to optimize
     sample_idx = random.randint(0, len(existing_vecs))
     input_vec = existing_vecs[sample_idx][None].clone()
+    print(input_vec)
     input_vec.requires_grad = True
     optimizer = torch.optim.Adam([input_vec], lr=lr)
 
@@ -469,8 +470,8 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
         population_values.append(sample_r.item())
 
         # Backprop
-        # sample_r = -sample_r
-        # sample_r.backward()
+        sample_r = -sample_r
+        sample_r.backward()
         # print(agent.net.model[0].weight.grad)
         # input()
         # optimizer.step()
