@@ -7,31 +7,51 @@ from utils import discretize_targets, build_histogram, gaussian_fn, device
 
 class ReplayDataset(Dataset):
     def __init__(self, features=None, rewards=None):
+        # Keep original in order to do LDS
+        self.original_features = features
+        self.original_rewards = rewards
+
+        # Actually used for training purposes, may be different from original avec LDS.
         self.features = features
         self.rewards = rewards
 
+        # Weights tensor for LDS
+        self.weights_per_obs = None
+
     def __len__(self):
-        return len(self.rewards)
+        return len(self.original_rewards)
 
     def __getitem__(self, idx):
-        return self.features[idx], self.rewards[idx]
+        return self.original_features[idx], self.original_rewards[idx]
 
     def set_(self, features_2d, rewards_2d):
-        self.features = features_2d
-        self.rewards = rewards_2d
+        self.original_features = features_2d
+        self.original_rewards = rewards_2d
 
     def add(self, features, reward):
         if features is None or reward is None:
             return
-        self.features = torch.cat((self.features, features))
-        self.rewards = torch.cat((self.rewards, reward))
+        self.original_features = torch.cat((self.original_features, features))
+        self.original_rewards = torch.cat((self.original_rewards, reward))
 
-    def get_weights(self, kern_size=5, kern_sigma=2, reweight="sqrt_inv"):
+    def update_weights(self, kern_size=5, kern_sigma=2, reweight="sqrt_inv"):
+        """Compute weights for label distribution smoothing via a gaussian kernel
+
+        Args:
+            kern_size (int, optional): Gaussian kernel size. Defaults to 5.
+            kern_sigma (int, optional): Gaussian kernel sigma. Defaults to 2.
+            reweight (str, optional): Type of reweighting done, must be either "sqrt_inv" or True. Defaults to "sqrt_inv".
+
+        Returns:
+            torch.Tensor (1D): sampling weights for label distribution smoothing
+        """
+        assert reweight in ["sqrt_inv", True]
+        # Implements label distribution smoothing (Delving into Deep Imbalanced Regression, https://arxiv.org/abs/2102.09554)
         bin_size = 0.1
         factor = 10
-        # Implements label distribution smoothing (Delving into Deep Imbalanced Regression, https://arxiv.org/abs/2102.09554)
         # Discretize the risks (labels used later)
-        flat_labels = self.rewards.flatten()
+
+        flat_labels = self.original_rewards.flatten()
         discrete_risks = discretize_targets(flat_labels, factor)
 
         hist, n_bins, list_bin_edges = build_histogram(flat_labels, factor, bin_size)
@@ -42,7 +62,6 @@ class ReplayDataset(Dataset):
 
         # Apply label distribution smoothing with gaussian filter
         # Get the gaussian filter
-
         kernel = gaussian_fn(kern_size, kern_sigma)[None, None]
         weights = conv1d(weights[None, None], kernel, padding=(kern_size // 2))
         weights = 1 / weights
@@ -52,7 +71,25 @@ class ReplayDataset(Dataset):
 
         # This isn't slow, looping is fast, dictionaries are hashmaps
         weights_per_obs = torch.tensor([weight_bins[risk] for risk in discrete_risks])
-        return weights_per_obs
+        self.weights_per_obs = weights_per_obs / weights_per_obs.sum()
+
+    def update_dataset(self):
+        """
+        Attempt at making a fully tabular dataset that can be batched via slicing instead of individual indexing
+        """
+        # If we do not do LDS
+        if self.weights_per_obs is None:
+            # Keep original dataset as the training dataset
+            self.features = self.original_features
+            self.rewards = self.original_rewards
+        # If we do LDS
+        else:
+            # Sample according to LDs weights. Make that our new training dataset.
+            sampled_idx = self.weights_per_obs.multinomial(
+                num_samples=len(self), replacement=True
+            )
+            self.features = self.original_features[sampled_idx]
+            self.rewards = self.original_rewards[sampled_idx]
 
 
 class ValidationReplayDataset(ReplayDataset):
@@ -125,3 +162,64 @@ class ValidationReplayDataset(ReplayDataset):
             self.features = torch.cat(list(self.bins_features.values()))
 
         return to_training
+
+
+class FastTensorDataLoader:
+    """
+    A DataLoader-like object for a set of tensors that can be much faster than
+    TensorDataset + DataLoader because dataloader grabs individual indices of
+    the dataset and calls cat (slow).
+    Source: https://discuss.pytorch.org/t/dataloader-much-slower-than-manual-batching/27014/6
+    """
+
+    def __init__(self, *tensors, batch_size=32, shuffle=False):
+        """
+        Initialize a FastTensorDataLoader.
+        :param *tensors: tensors to store. Must have the same length @ dim 0.
+        :param batch_size: batch size to load.
+        :param shuffle: if True, shuffle the data *in-place* whenever an
+            iterator is created out of this object.
+        :returns: A FastTensorDataLoader.
+        """
+        assert all(t.shape[0] == tensors[0].shape[0] for t in tensors)
+        self.tensors = tensors
+
+        self.dataset_len = self.tensors[0].shape[0]
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+
+        # Calculate # batches
+        n_batches, remainder = divmod(self.dataset_len, self.batch_size)
+        if remainder > 0:
+            n_batches += 1
+        self.n_batches = n_batches
+
+    def __iter__(self):
+        """Shuffles the dataset if needed and resets the index
+
+        Returns:
+            self
+        """
+        if self.shuffle:
+            r = torch.randperm(self.dataset_len)
+            self.tensors = [t[r] for t in self.tensors]
+        self.i = 0
+        return self
+
+    def __next__(self):
+        """Picks and returns a batch
+
+        Raises:
+            StopIteration: if end of dataset reached
+
+        Returns:
+            torch.Tensor: batch of data
+        """
+        if self.i >= self.dataset_len:
+            raise StopIteration
+        batch = tuple(t[self.i : self.i + self.batch_size] for t in self.tensors)
+        self.i += self.batch_size
+        return batch
+
+    def __len__(self):
+        return self.n_batches

@@ -7,7 +7,7 @@ import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
-from datasets import ReplayDataset, ValidationReplayDataset
+from datasets import ReplayDataset, ValidationReplayDataset, FastTensorDataLoader
 from utils import EarlyStopping, get_model_selection_loss, device, num_cpus, using_cpu
 
 logging.basicConfig(level=logging.INFO)
@@ -100,34 +100,39 @@ class DENeuralTSDiag:
             )
 
         shuffle = True
-        sampler = None
         remainder_is_one = (n_dataset % batch_size) == 1
         if lds:
-            w = self.train_dataset.get_weights(reweight=lds)
-            sampler = WeightedRandomSampler(
-                w,
-                num_samples=n_train,
-                generator=torch.Generator(device=device),
-            )
-            shuffle = False
+            self.train_dataset.update_weights(reweight=lds)
 
-        loader = DataLoader(
-            self.train_dataset,
+        self.train_dataset.update_dataset()
+
+        # loader = DataLoader(
+        #     self.train_dataset,
+        #     batch_size=batch_size,
+        #     shuffle=shuffle,
+        #     sampler=sampler,
+        #     generator=torch.Generator(device=device),
+        #     drop_last=remainder_is_one,
+        #     # num_workers=using_cpu * num_cpus,
+        # )
+
+        loader = FastTensorDataLoader(
+            self.train_dataset.features,
+            self.train_dataset.rewards,
             batch_size=batch_size,
             shuffle=shuffle,
-            sampler=sampler,
-            generator=torch.Generator(device=device),
-            drop_last=remainder_is_one,
-            # num_workers=using_cpu * num_cpus,
         )
 
         early_stop = EarlyStopping(patience)
 
         # Choose whether we do model selection based on training set loss or validation set loss
         if self.valtype == "noval":
-            val_dataset = self.train_dataset
+            X_val, y_val = (
+                self.train_dataset.original_features,
+                self.train_dataset.original_rewards,
+            )
         else:
-            val_dataset = self.val_dataset
+            X_val, y_val = self.val_dataset.features, self.val_dataset.rewards
         # Train loop
         for _ in range(n_epochs):
             for X, y in loader:
@@ -212,7 +217,7 @@ class LenientDENeuralTSDiag(DENeuralTSDiag):
         if mu.item() > self.reward_sample_thresholds[1]:
             sample_r = mu
         else:
-            sample_r = torch.tensor([0])
+            sample_r = torch.tensor([0.0])
             torch.nn.init.trunc_normal_(
                 sample_r, mu.view(-1), sigma.view(-1), *self.reward_sample_thresholds
             )
