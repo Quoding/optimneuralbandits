@@ -8,31 +8,31 @@ from utils import discretize_targets, build_histogram, gaussian_fn, device
 class ReplayDataset(Dataset):
     def __init__(self, features=None, rewards=None):
         # Keep original in order to do LDS
-        self.original_features = features
-        self.original_rewards = rewards
-
-        # Actually used for training purposes, may be different from original avec LDS.
         self.features = features
         self.rewards = rewards
+
+        # Actually used for training purposes, may be different from original avec LDS.
+        self.training_features = features
+        self.training_rewards = rewards
 
         # Weights tensor for LDS
         self.weights_per_obs = None
 
     def __len__(self):
-        return len(self.original_rewards)
+        return len(self.rewards)
 
     def __getitem__(self, idx):
-        return self.original_features[idx], self.original_rewards[idx]
+        return self.features[idx], self.rewards[idx]
 
     def set_(self, features_2d, rewards_2d):
-        self.original_features = features_2d
-        self.original_rewards = rewards_2d
+        self.features = features_2d
+        self.rewards = rewards_2d
 
     def add(self, features, reward):
         if features is None or reward is None:
             return
-        self.original_features = torch.cat((self.original_features, features))
-        self.original_rewards = torch.cat((self.original_rewards, reward))
+        self.features = torch.cat((self.features, features))
+        self.rewards = torch.cat((self.rewards, reward))
 
     def update_weights(self, kern_size=5, kern_sigma=2, reweight="sqrt_inv"):
         """Compute weights for label distribution smoothing via a gaussian kernel
@@ -51,7 +51,7 @@ class ReplayDataset(Dataset):
         factor = 10
         # Discretize the risks (labels used later)
 
-        flat_labels = self.original_rewards.flatten()
+        flat_labels = self.rewards.flatten()
         discrete_risks = discretize_targets(flat_labels, factor)
 
         hist, n_bins, list_bin_edges = build_histogram(flat_labels, factor, bin_size)
@@ -80,16 +80,16 @@ class ReplayDataset(Dataset):
         # If we do not do LDS
         if self.weights_per_obs is None:
             # Keep original dataset as the training dataset
-            self.features = self.original_features
-            self.rewards = self.original_rewards
+            self.training_features = self.features
+            self.training_rewards = self.rewards
         # If we do LDS
         else:
             # Sample according to LDs weights. Make that our new training dataset.
             sampled_idx = self.weights_per_obs.multinomial(
                 num_samples=len(self), replacement=True
             )
-            self.features = self.original_features[sampled_idx]
-            self.rewards = self.original_rewards[sampled_idx]
+            self.training_features = self.features[sampled_idx]
+            self.training_rewards = self.rewards[sampled_idx]
 
 
 class ValidationReplayDataset(ReplayDataset):

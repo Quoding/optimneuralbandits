@@ -117,8 +117,8 @@ class DENeuralTSDiag:
         # )
 
         loader = FastTensorDataLoader(
-            self.train_dataset.features,
-            self.train_dataset.rewards,
+            self.train_dataset.training_features,
+            self.train_dataset.training_rewards,
             batch_size=batch_size,
             shuffle=shuffle,
         )
@@ -128,8 +128,8 @@ class DENeuralTSDiag:
         # Choose whether we do model selection based on training set loss or validation set loss
         if self.valtype == "noval":
             X_val, y_val = (
-                self.train_dataset.original_features,
-                self.train_dataset.original_rewards,
+                self.train_dataset.features,
+                self.train_dataset.rewards,
             )
         else:
             X_val, y_val = self.val_dataset.features, self.val_dataset.rewards

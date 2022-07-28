@@ -15,12 +15,13 @@ from detorch import DE, Policy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
 
+using_cpu = True
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if device == torch.device("cuda"):
     torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    using_cpu = False
 
 num_cpus = len(os.sched_getaffinity(0))
-using_cpu = device == torch.device("cpu")
 
 logging.basicConfig(level=logging.INFO)
 
@@ -630,8 +631,7 @@ def gaussian_fn(size, std):
     return w
 
 
-def get_model_selection_loss(net, dataset, loss_fn):
-    X_val, y_val = dataset.features.to(device), dataset.rewards.to(device)
+def get_model_selection_loss(net, X_val, y_val, loss_fn):
     with torch.no_grad():
         pred = net(X_val)
         loss = loss_fn(pred, y_val)
