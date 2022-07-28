@@ -144,7 +144,7 @@ class DENeuralTSDiag:
 
             self.net.eval()
             stored_loss = get_model_selection_loss(
-                self.net, val_dataset, self.loss_func
+                self.net, X_val, y_val, self.loss_func
             )
             self.net.train()
             early_stop(stored_loss, self.net)

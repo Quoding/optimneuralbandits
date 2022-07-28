@@ -54,15 +54,15 @@ make_deterministic(seed)
 # combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset, "testing/datasets")
 combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
-# reward_fn = lambda idx: (
-#     risks[idx],
-#     risks[idx],
-# )
-
 reward_fn = lambda idx: (
-    risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
+    risks[idx],
     risks[idx],
 )
+
+# reward_fn = lambda idx: (
+#     risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
+#     risks[idx],
+# )
 net = Network(
     n_dim, n_hidden_layers, n_output=1, hidden_size=width, batch_norm=batch_norm
 ).to(device)

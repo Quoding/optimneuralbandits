@@ -66,14 +66,14 @@ class DEConfig:
 combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
-# reward_fn = lambda idx: (
-#     risks[idx],
-#     risks[idx],
-# )
 reward_fn = lambda idx: (
-    risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
+    risks[idx],
     risks[idx],
 )
+# reward_fn = lambda idx: (
+#     risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
+#     risks[idx],
+# )
 
 #### SET UP NETWORK AND DE ####
 de_config = DEConfig
