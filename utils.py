@@ -580,22 +580,85 @@ def get_data_splits(combis, risks, valtype="extrema"):
     return X_train, y_train, X_val, y_val
 
 
-def compute_metrics(agent, combis, thresh, pat_vecs, true_sol, n_sigmas):
+def compute_metrics(
+    agent,
+    combis,
+    thresh,
+    pat_vecs,
+    true_sol,
+    n_sigmas,
+    all_flagged_combis,
+    all_flagged_pats,
+):
+    """Compute metrics for combination test
+
+    Args:
+        agent (OptimNeuralTS): the bandit agent
+        combis (torch.Tensor): all possible combinations of Rx in the dataset
+        thresh (float): threshold of risk
+        pat_vecs (torch.Tensor): pattern vectors used to generate dataset
+        true_sol (torch.Tensor): true solution of the dataset
+        n_sigmas (float): number of sigmas to consider (sigma-rule sense)
+        all_flagged_combis (torch.Tensor): all previously flagged combinations
+        all_flagged_pats (torch.Tensor): all previously flagged patterns
+
+    Returns:
+        tuple: tuple of metrics and updated tensors in the following order:
+        jaccard for current step,
+        ratio_app for current step,
+        percent_found_pat for current step,
+        n_inter for current step,
+        jaccard for all steps so far,
+        ratio_app for all steps so far,
+        percent_found_pat for all steps so far,
+        n_inter for all steps so far,
+        updated all flagged combis,
+        updated all flagged pats,
+    """
+
     # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
     sol, _, _ = agent.find_solution_in_vecs(combis, thresh, n_sigmas)
+
+    all_flagged_combis = torch.cat((all_flagged_combis, sol)).unique(dim=0)
+
     # Parmis les patrons dangereux (ground truth), combien j'en trouve tels quels
     sol_pat, _, _ = agent.find_solution_in_vecs(pat_vecs, thresh, n_sigmas)
+
+    all_flagged_pats = torch.cat((all_flagged_pats, sol_pat)).unique(dim=0)
+
     # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
-    jaccard, n_inter = compute_jaccard(sol, true_sol)
+    jaccard, n_inter = compute_jaccard(sol, true_sol)  # Jaccard for the current step
+
+    jaccard_all, n_inter_all = compute_jaccard(
+        all_flagged_combis[1:], true_sol
+    )  # Jaccard for all steps before + this one if we keep all previous solutions
+
     # Combien de patrons tels quels j'ai flag ?
-    percent_found_pat = len(sol_pat) / len(pat_vecs)
+    percent_found_pat = len(sol_pat) / len(pat_vecs)  # For this step
+    percent_found_pat_all = len(all_flagged_pats[1:]) / len(
+        pat_vecs
+    )  # For all previous steps and this one
+
     # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
     if len(sol) == 0:
         ratio_app = 0
+        ratio_app_all = 0
     else:
         ratio_app = n_inter / len(sol)
+        ratio_app_all = n_inter_all / len(all_flagged_combis[1:])
 
-    return jaccard, ratio_app, percent_found_pat, n_inter
+    return (
+        jaccard,
+        ratio_app,
+        percent_found_pat,
+        n_inter,
+        jaccard_all,
+        ratio_app_all,
+        percent_found_pat_all,
+        n_inter_all,
+        all_flagged_combis,
+        all_flagged_pats,
+    )
 
 
 def discretize_targets(targets, factor):

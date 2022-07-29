@@ -85,9 +85,16 @@ net = Network(
 #### METRICS ####
 jaccards = []
 ratio_apps = []
-percent_found_pats = []
+ratio_found_pats = []
+jaccards_alls = []
+ratio_apps_alls = []
+ratio_found_pats_alls = []
+n_inter_alls = []
 losses = []
 dataset_losses = []
+# dummy tensors to append to without trouble. They are skipped on metric calculation. Also, the minus signs prevent these from being real combinations
+all_flagged_combis = -torch.ones_like(combis[0])[None]
+all_flagged_pats = -torch.ones_like(combis[0])[None]
 
 # Define true solution
 combis_in_sol = torch.where(risks > thresh)[0]
@@ -114,15 +121,15 @@ if valtype != "noval":
     agent.val_dataset.set_(X_val, y_val)
 
 
-#### WARMUP ####
 logging.info("Warming up...")
+#### WARMUP ####
 agent.net.eval()
 for vec in agent.train_dataset.features:
     activ, grad = agent.compute_activation_and_grad(vec[None])
     agent.U += grad * grad
 
 agent.net.train()
-agent.train(
+loss = agent.train(
     n_epochs,
     lr=lr,
     batch_size=batch_size,
@@ -147,15 +154,41 @@ logging.info("Warm up over. Computing metrics...")
 #     plt.show()
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
-jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-    agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+(
+    jaccard,
+    ratio_app,
+    percent_found_pat,
+    n_inter,
+    jaccard_all,
+    ratio_app_all,
+    percent_found_pat_all,
+    n_inter_all,
+    all_flagged_combis,
+    all_flagged_pats,
+) = compute_metrics(
+    agent,
+    combis,
+    thresh,
+    pat_vecs,
+    true_sol,
+    n_sigmas,
+    all_flagged_combis,
+    all_flagged_pats,
 )
 logging.info(
     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
 )
+logging.info(
+    f"jaccard all: {jaccard_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
+)
 jaccards.append(jaccard)
 ratio_apps.append(ratio_app)
-percent_found_pats.append(percent_found_pat)
+ratio_found_pats.append(percent_found_pat)
+jaccards_alls.append(jaccard_all)
+ratio_apps_alls.append(ratio_app_all)
+ratio_found_pats_alls.append(percent_found_pat_all)
+n_inter_alls.append(n_inter_all)
+losses.append(loss)
 logging.info("Post warmup metrics over. Starting training")
 
 
@@ -189,8 +222,26 @@ for i in range(n_trials):
         agent.net.eval()
     #### COMPUTE METRICS ####
     if (i + 1) % 200 == 0:
-        jaccard, ratio_app, percent_found_pat, n_inter = compute_metrics(
-            agent, combis, thresh, pat_vecs, true_sol, n_sigmas
+        (
+            jaccard,
+            ratio_app,
+            percent_found_pat,
+            n_inter,
+            jaccard_all,
+            ratio_app_all,
+            percent_found_pat_all,
+            n_inter_all,
+            all_flagged_combis,
+            all_flagged_pats,
+        ) = compute_metrics(
+            agent,
+            combis,
+            thresh,
+            pat_vecs,
+            true_sol,
+            n_sigmas,
+            all_flagged_combis,
+            all_flagged_pats,
         )
 
         with torch.no_grad():
@@ -200,20 +251,46 @@ for i in range(n_trials):
 
         jaccards.append(jaccard)
         ratio_apps.append(ratio_app)
-        percent_found_pats.append(percent_found_pat)
+        ratio_found_pats.append(percent_found_pat)
+        jaccards_alls.append(jaccard_all)
+        ratio_apps_alls.append(ratio_app_all)
+        ratio_found_pats_alls.append(percent_found_pat_all)
+        n_inter_alls.append(n_inter_all)
+
         losses.append(loss)
 
         logging.info(
             f"trial: {i + 1}, jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
         )
+        logging.info(
+            f"jaccard all: {jaccard_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
+        )
+
+
 output_dir = args.output
-l = ["agents", "jaccards", "ratio_apps", "ratio_found_pats", "losses", "dataset_losses"]
+l = [
+    "agents",
+    "jaccards",
+    "ratio_apps",
+    "ratio_found_pats",
+    "losses",
+    "dataset_losses",
+    "jaccards_alls",
+    "ratio_apps_alls",
+    "ratio_found_pats_alls",
+    "n_inter_alls",
+]
+
 for item in l:
     os.makedirs(f"{output_dir}/{item}/", exist_ok=True)
 
 torch.save(agent, f"{output_dir}/agents/{seed}.pth")
 torch.save(jaccards, f"{output_dir}/jaccards/{seed}.pth")
 torch.save(ratio_apps, f"{output_dir}/ratio_apps/{seed}.pth")
-torch.save(percent_found_pats, f"{output_dir}/ratio_found_pats/{seed}.pth")
+torch.save(ratio_found_pats, f"{output_dir}/ratio_found_pats/{seed}.pth")
 torch.save(losses, f"{output_dir}/losses/{seed}.pth")
 torch.save(dataset_losses, f"{output_dir}/dataset_losses/{seed}.pth")
+torch.save(jaccards_alls, f"{output_dir}/jaccards_alls/{seed}.pth")
+torch.save(ratio_apps_alls, f"{output_dir}/ratio_apps_alls/{seed}.pth")
+torch.save(ratio_found_pats_alls, f"{output_dir}/ratio_found_pats_alls/{seed}.pth")
+torch.save(n_inter_alls, f"{output_dir}/n_inter_alls/{seed}.pth")
