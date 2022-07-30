@@ -642,9 +642,12 @@ def compute_metrics(
     # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
     if len(sol) == 0:
         ratio_app = 0
-        ratio_app_all = 0
     else:
         ratio_app = n_inter / len(sol)
+
+    if len(all_flagged_combis[1:]) == 0:
+        ratio_app_all = 0
+    else:
         ratio_app_all = n_inter_all / len(all_flagged_combis[1:])
 
     return (
