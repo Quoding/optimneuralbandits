@@ -222,7 +222,7 @@ for i in range(n_trials):
         )
         agent.net.eval()
     #### COMPUTE METRICS ####
-    if (i + 1) % 100 == 0:
+    if (i + 1) % 200 == 0:
         (
             jaccard,
             ratio_app,
