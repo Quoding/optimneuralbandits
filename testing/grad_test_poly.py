@@ -54,11 +54,11 @@ make_deterministic(seed)
 # combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset, "testing/datasets")
 combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
+
 reward_fn = lambda idx: (
     risks[idx],
     risks[idx],
 )
-
 # reward_fn = lambda idx: (
 #     risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
 #     risks[idx],
@@ -78,14 +78,15 @@ ratio_found_pats_alls = []
 n_inter_alls = []
 losses = []
 dataset_losses = []
-# dummy tensors to append to without trouble. They are skipped on metric calculation. Also, the minus signs prevent these from being real combinations
-all_flagged_combis = -torch.ones_like(combis[0])[None]
-all_flagged_pats = -torch.ones_like(combis[0])[None]
+all_flagged_combis_idx = set()
+all_flaggeds_risks = []
+all_flagged_pats_idx = set()
 
 # Define true solution
-combis_in_sol = torch.where(risks > thresh)[0]
-true_sol = combis[combis_in_sol]
-n_combis_in_sol = len(combis_in_sol)
+true_sol_idx = torch.where(risks > thresh)[0]
+true_sol = combis[true_sol_idx]
+true_sol_idx = set(true_sol_idx.tolist())
+n_combis_in_sol = len(true_sol_idx)
 
 logging.info(f"There are {n_combis_in_sol} combinations in the solution set")
 
@@ -149,17 +150,17 @@ logging.info("Warm up over. Computing metrics...")
     ratio_app_all,
     percent_found_pat_all,
     n_inter_all,
-    all_flagged_combis,
-    all_flagged_pats,
+    all_flagged_combis_idx,
+    all_flagged_pats_idx,
 ) = compute_metrics(
     agent,
     combis,
     thresh,
     pat_vecs,
-    true_sol,
+    true_sol_idx,
     n_sigmas,
-    all_flagged_combis,
-    all_flagged_pats,
+    all_flagged_combis_idx,
+    all_flagged_pats_idx,
 )
 logging.info(
     f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
@@ -213,17 +214,17 @@ for i in range(n_trials):
             ratio_app_all,
             percent_found_pat_all,
             n_inter_all,
-            all_flagged_combis,
-            all_flagged_pats,
+            all_flagged_combis_idx,
+            all_flagged_pats_idx,
         ) = compute_metrics(
             agent,
             combis,
             thresh,
             pat_vecs,
-            true_sol,
+            true_sol_idx,
             n_sigmas,
-            all_flagged_combis,
-            all_flagged_pats,
+            all_flagged_combis_idx,
+            all_flagged_pats_idx,
         )
 
         with torch.no_grad():
@@ -261,7 +262,11 @@ l = [
     "ratio_apps_alls",
     "ratio_found_pats_alls",
     "n_inter_alls",
+    "all_flagged_combis",
+    "all_flagged_risks",
 ]
+
+all_flagged_risks = risks[torch.tensor(list(all_flagged_combis_idx))]
 
 for item in l:
     os.makedirs(f"{output_dir}/{item}/", exist_ok=True)
@@ -276,3 +281,5 @@ torch.save(jaccards_alls, f"{output_dir}/jaccards_alls/{seed}.pth")
 torch.save(ratio_apps_alls, f"{output_dir}/ratio_apps_alls/{seed}.pth")
 torch.save(ratio_found_pats_alls, f"{output_dir}/ratio_found_pats_alls/{seed}.pth")
 torch.save(n_inter_alls, f"{output_dir}/n_inter_alls/{seed}.pth")
+torch.save(all_flagged_risks, f"{output_dir}/all_flagged_risks/{seed}.pth")
+torch.save(all_flagged_combis_idx, f"{output_dir}/all_flagged_combis_idx/{seed}.pth")

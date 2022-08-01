@@ -252,14 +252,12 @@ def make_deterministic(seed=42):
     random.seed(seed)
 
 
-def compute_jaccard(found_solution, true_solution):
-    found_sol_list = found_solution.tolist()
-    true_sol_list = true_solution.tolist()
-
+def compute_jaccard(found_solution: set, true_solution: set):
     n_in_inter = 0
 
-    for vec in found_sol_list:
-        n_in_inter += vec in true_sol_list
+    intersection = found_solution & true_solution
+
+    n_in_inter = len(intersection)
 
     return (
         n_in_inter / (len(found_solution) + len(true_solution) - n_in_inter),
@@ -587,10 +585,10 @@ def compute_metrics(
     combis,
     thresh,
     pat_vecs,
-    true_sol,
+    true_sol_idx,
     n_sigmas,
-    all_flagged_combis,
-    all_flagged_pats,
+    all_flagged_combis_idx,
+    all_flagged_pats_idx,
 ):
     """Compute metrics for combination test
 
@@ -619,38 +617,40 @@ def compute_metrics(
     """
 
     # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
-    sol, _, _ = agent.find_solution_in_vecs(combis, thresh, n_sigmas)
+    sol_idx, _, _ = agent.find_solution_in_vecs(combis, thresh, n_sigmas)
 
-    all_flagged_combis = torch.cat((all_flagged_combis, sol)).unique(dim=0)
+    all_flagged_combis_idx.update(sol_idx)
 
     # Parmis les patrons dangereux (ground truth), combien j'en trouve tels quels
-    sol_pat, _, _ = agent.find_solution_in_vecs(pat_vecs, thresh, n_sigmas)
+    sol_pat_idx, _, _ = agent.find_solution_in_vecs(pat_vecs, thresh, n_sigmas)
 
-    all_flagged_pats = torch.cat((all_flagged_pats, sol_pat)).unique(dim=0)
+    all_flagged_pats_idx.update(sol_pat_idx)
 
     # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
-    jaccard, n_inter = compute_jaccard(sol, true_sol)  # Jaccard for the current step
+    jaccard, n_inter = compute_jaccard(
+        sol_idx, true_sol_idx
+    )  # Jaccard for the current step
 
     jaccard_all, n_inter_all = compute_jaccard(
-        all_flagged_combis[1:], true_sol
+        all_flagged_combis_idx, true_sol_idx
     )  # Jaccard for all steps before + this one if we keep all previous solutions
 
     # Combien de patrons tels quels j'ai flag ?
-    percent_found_pat = len(sol_pat) / len(pat_vecs)  # For this step
-    percent_found_pat_all = len(all_flagged_pats[1:]) / len(
+    percent_found_pat = len(sol_pat_idx) / len(pat_vecs)  # For this step
+    percent_found_pat_all = len(all_flagged_pats_idx) / len(
         pat_vecs
     )  # For all previous steps and this one
 
     # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
-    if len(sol) == 0:
-        ratio_app = 0
+    if len(sol_idx) == 0:
+        ratio_app = float("nan")
     else:
-        ratio_app = n_inter / len(sol)
+        ratio_app = n_inter / len(sol_idx)
 
-    if len(all_flagged_combis[1:]) == 0:
-        ratio_app_all = 0
+    if len(all_flagged_combis_idx) == 0:
+        ratio_app_all = float("nan")
     else:
-        ratio_app_all = n_inter_all / len(all_flagged_combis[1:])
+        ratio_app_all = n_inter_all / len(all_flagged_combis_idx)
 
     return (
         jaccard,
@@ -661,8 +661,8 @@ def compute_metrics(
         ratio_app_all,
         percent_found_pat_all,
         n_inter_all,
-        all_flagged_combis,
-        all_flagged_pats,
+        all_flagged_combis_idx,
+        all_flagged_pats_idx,
     )
 
 
