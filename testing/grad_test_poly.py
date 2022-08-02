@@ -262,10 +262,11 @@ l = [
     "ratio_apps_alls",
     "ratio_found_pats_alls",
     "n_inter_alls",
-    "all_flagged_combis",
+    "all_flagged_combis_idx",
     "all_flagged_risks",
 ]
 
+print(torch.tensor(list(all_flagged_combis_idx)))
 all_flagged_risks = risks[torch.tensor(list(all_flagged_combis_idx))]
 
 for item in l:

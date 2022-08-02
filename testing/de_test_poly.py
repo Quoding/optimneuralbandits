@@ -280,11 +280,16 @@ l = [
     "ratio_apps_alls",
     "ratio_found_pats_alls",
     "n_inter_alls",
-    "all_flagged_combis",
+    "all_flagged_combis_idx",
     "all_flagged_risks",
 ]
 
-all_flagged_risks = risks[torch.tensor(list(all_flagged_combis_idx))]
+try:
+    all_flagged_risks = risks[torch.tensor(list(all_flagged_combis_idx))]
+except IndexError as e:
+    logging.info("No flagged combination during the entire experiment")
+    logging.info("all_flagged_risks is now an empty tensor")
+    all_flagged_risks = torch.tensor([])
 
 for item in l:
     os.makedirs(f"{output_dir}/{item}/", exist_ok=True)
