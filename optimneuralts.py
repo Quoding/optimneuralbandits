@@ -179,7 +179,7 @@ class DENeuralTSDiag:
         sigmas = []
         # First pass, weed out vectors with small activs so we don't waste time in the loop to extract solutions
         activs = self.net(vecs)
-        possible_solution_vecs_idx = torch.where(activs > thresh)[0]
+        possible_solution_vecs_idx = torch.where(activs > thresh)[0].tolist()
         possible_solution_vecs = vecs[possible_solution_vecs_idx]
 
         for i, vec in zip(possible_solution_vecs_idx, possible_solution_vecs):
@@ -188,7 +188,7 @@ class DENeuralTSDiag:
             sigma = torch.sqrt(self.lambda_ * sigma)
 
             if (mu - n_sigmas * sigma).item() > thresh:
-                solution_idx.add(i)
+                solution_idx.add(i.item())
 
             mus.append(mu.item())
             sigmas.append(n_sigmas * sigma.item())

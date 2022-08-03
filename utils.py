@@ -616,7 +616,7 @@ def compute_metrics(
         updated all flagged pats,
     """
 
-    # Parmis tous les vecteurs existant, lesquels je trouve ? (Jaccard, ratio_app)
+    # Parmis tous les vecteurs "existant", lesquels je trouve ? (Jaccard, ratio_app)
     sol_idx, _, _ = agent.find_solution_in_vecs(combis, thresh, n_sigmas)
 
     all_flagged_combis_idx.update(sol_idx)
