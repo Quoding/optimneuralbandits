@@ -330,7 +330,7 @@ def setup_data(
     training_data = CombiDataset(X_train, y_train, classif_thresh)
     if reweight is not None:
         w = training_data.get_weights(reweight=reweight)
-        sampler = WeightedRandomSampler(w, num_samples=4096)
+        sampler = WeightedRandomSampler(w, num_samples=n_obs)
         trainloader = DataLoader(
             training_data,
             batch_size=batch_size,
