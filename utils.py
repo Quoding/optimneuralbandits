@@ -301,7 +301,7 @@ def parse_args():
         "-l",
         "--layers",
         type=int,
-        default=3,
+        default=1,
         help="Number of hidden layers",
     )
     parser.add_argument(

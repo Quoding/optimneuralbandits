@@ -188,7 +188,7 @@ class DENeuralTSDiag:
             sigma = torch.sqrt(self.lambda_ * sigma)
 
             if (mu - n_sigmas * sigma).item() > thresh:
-                solution_idx.add(i.item())
+                solution_idx.add(i)
 
             mus.append(mu.item())
             sigmas.append(n_sigmas * sigma.item())
