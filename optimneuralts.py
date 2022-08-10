@@ -86,7 +86,8 @@ class DENeuralTSDiag:
         if n_train == -1:
             n_train = n_dataset
         # Setup
-        self.len += 1
+        # self.len += 1
+        self.len = n_dataset
         weight_decay = use_decay * (self.lambda_ / self.len)
 
         if lr == "plateau":
