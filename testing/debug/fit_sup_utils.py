@@ -318,7 +318,11 @@ def setup_data(
         # Create a test set so we can see how good the model actually is different stages
         X_test, y_test = combis[n_obs:], risks[n_obs:]
     else:
-        X_val, y_val = combis[n_obs:], risks[n_obs:]
+        # Use train set as val set too
+        X_val, y_val = combis[:n_obs], risks[:n_obs]
+        X_test, y_test = combis[n_obs:], risks[n_obs:]
+
+    if len(X_test) == 0 or len(y_test) == 0:
         X_test, y_test = None, None
 
     X_train, y_train = combis[:n_obs], risks[:n_obs]
@@ -411,6 +415,7 @@ def plot_pred_vs_gt(
     title,
     pred_idx,
     invert=False,
+    noval=False,
 ):
     fig = plt.figure()
     plt.title(title)
@@ -438,17 +443,18 @@ def plot_pred_vs_gt(
             zorder=z_test,
         )
         # Set alpha of small validation set to be more visible
-        val_alpha = 1
         z_val = 10
-
-    plt.scatter(
-        val_true.cpu().numpy(),
-        val_pred[:, pred_idx],
-        alpha=val_alpha,
-        color="tab:orange",
-        label="Validation",
-        zorder=z_val,
-    )
+        if len(val_true) < 100:
+            val_alpha = 1
+    if not noval:
+        plt.scatter(
+            val_true.cpu().numpy(),
+            val_pred[:, pred_idx],
+            alpha=val_alpha,
+            color="tab:orange",
+            label="Validation",
+            zorder=z_val,
+        )
     plt.scatter(
         train_true.cpu().numpy(),
         train_pred[:, pred_idx],
@@ -459,13 +465,23 @@ def plot_pred_vs_gt(
     )
 
     plt.plot(
-        [0, xlim], [0, ylim], color="black", linestyle="dashed", label="Perfection"
+        [0, xlim],
+        [0, ylim],
+        color="black",
+        linestyle="dashed",
+        label="Perfection",
+        zorder=11,
     )
 
     plt.plot(
-        [1.1, 1.1], [0, 1.1], color="black", linestyle="dotted", label="Seuil de risque"
+        [1.1, 1.1],
+        [0, 1.1],
+        color="black",
+        linestyle="dotted",
+        label="Seuil de risque",
+        zorder=11,
     )
-    plt.plot([0, 1.1], [1.1, 1.1], color="black", linestyle="dotted")
+    plt.plot([0, 1.1], [1.1, 1.1], color="black", linestyle="dotted", zorder=11)
     plt.legend()
 
     return fig
