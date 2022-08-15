@@ -122,7 +122,7 @@ def compute_relative_risk(combi, pop_combis, pop_outcomes):
     if vec.sum() < 5:
         return 0
 
-    vec_indices = (vec.squeeze(0) == 1.0)[0]
+    vec_indices = (vec.squeeze(0) == 1)[0]
 
     # Get boolean array for exposed and controls
     rows_exposed = torch.where((X[:, vec_indices] == 1).all(dim=1), True, False)
