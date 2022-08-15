@@ -117,36 +117,30 @@ class QuantileLoss(nn.Module):
         return loss
 
 
-def compute_relative_risk(vec, X, y):
+def compute_relative_risk(combi, pop_combis, pop_outcomes):
     # Determined by polypharmacy definition
     if vec.sum() < 5:
         return 0
 
-    vec_indices = torch.where(vec == 1)[0]
+    vec_indices = (vec.squeeze(0) == 1.0)[0]
 
-    # Exposed
-    rows_exposed = torch.where((X[:, vec_indices] == 1).all(axis=1))[0]
-    rows_control = torch.where((X[:, vec_indices] == 0).any(axis=1))[0]
-    rows_exposed_case = torch.where(y[rows_exposed] == 1)[0]
-    rows_control_case = torch.where(y[rows_control] == 1)[0]
+    # Get boolean array for exposed and controls
+    rows_exposed = torch.where((X[:, vec_indices] == 1).all(dim=1), True, False)
+    rows_control = torch.logical_not(rows_exposed)
 
-    n_exposed = len(rows_exposed)
-    n_exposed_case = len(rows_exposed_case)
-    n_control = len(rows_control)
-    n_control_case = len(rows_control_case)
+    n_exposed = rows_exposed.sum()
+    n_control = rows_control.sum()
+    n_exposed_case = y[rows_exposed].sum()
+    n_control_case = y[rows_control].sum()
 
-    rr = relative_risk(
-        n_exposed_case, n_exposed, n_control_case, n_control
-    ).relative_risk
+    rr = (n_exposed_cases / n_exposed) / (n_control_cases / n_control)
 
     if isnan(rr):
         # Interpreted as 0 by experts
         return 0
 
-    elif rr == float("inf"):
-        return 10  # Return something really big, but not inf so it doesn't break the regression
-
-    return rr
+    # Clip in a realistic range the RR so we don't end up with infinite RR
+    return torch.clip(rr, 0, 10)
 
 
 def change_to_closest_existing_vector(vec, set_existing_vecs):
