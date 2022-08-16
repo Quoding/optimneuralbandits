@@ -115,23 +115,26 @@ class QuantileLoss(nn.Module):
         loss = torch.mean(torch.sum(torch.cat(losses, dim=1), dim=1))
 
         return loss
-
+    
 
 def compute_relative_risk(combi, pop_combis, pop_outcomes):
     # Determined by polypharmacy definition
-    if vec.sum() < 5:
+    if combi.sum() < 5:
         return 0
 
-    vec_indices = (vec.squeeze(0) == 1)[0]
+    vec_indices = (combi == 1).squeeze(0)
 
     # Get boolean array for exposed and controls
-    rows_exposed = torch.where((X[:, vec_indices] == 1).all(dim=1), True, False)
+    rows_exposed = torch.where(
+        (pop_combis[:, vec_indices] == 1).all(dim=1), True, False
+    )
+
     rows_control = torch.logical_not(rows_exposed)
 
     n_exposed = rows_exposed.sum()
     n_control = rows_control.sum()
-    n_exposed_case = y[rows_exposed].sum()
-    n_control_case = y[rows_control].sum()
+    n_exposed_cases = pop_outcomes[rows_exposed].sum()
+    n_control_cases = pop_outcomes[rows_control].sum()
 
     rr = (n_exposed_cases / n_exposed) / (n_control_cases / n_control)
 
