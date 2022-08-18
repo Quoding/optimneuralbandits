@@ -116,6 +116,39 @@ class QuantileLoss(nn.Module):
 
         return loss
     
+def sample_from_sql(con, table, num_samples, num_rows, columns):
+    samples_idx = torch.randint(0, num_rows + 1, size=(num_samples,)).tolist()
+    statement = f"SELECT {columns} FROM {table} WHERE ROWID IN {*samples_idx,}"
+
+    sample = pd.read_sql(statement, con=con).to_numpy()
+    sample = torch.from_numpy(sample)
+    combis = sample[:, :-1]
+    outcomes = sample[:, -1]
+
+    return combis, outcomes
+    
+def get_table_stats(con, table):
+    """Returns num_rows, num_cols, atc_col names for table `table`
+
+    Args:
+        con (sqlite.Connection): Connection object to database
+        table (str): table name
+
+    Returns:
+        tuple: (number of rows, number of cols, atc column names (list))
+    """
+    cur = con.cursor()
+    num_rows = cur.execute(f"SELECT COUNT(*) FROM {table};").fetchall()[0][0]
+    num_cols = cur.execute(
+        f'SELECT COUNT(*) FROM PRAGMA_TABLE_INFO("{table}")'
+    ).fetchall()[0][0]
+    cur.row_factory = lambda cursor, row: row[0]
+    atc_cols_names = cur.execute(
+        f'SELECT NAME FROM PRAGMA_TABLE_INFO("{table}") WHERE CID BETWEEN {COMBI_INDEXES[0]} AND {COMBI_INDEXES[1]}'
+    ).fetchall()
+
+    return num_rows, num_cols, atc_cols_names
+
 
 def compute_relative_risk(combi, pop_combis, pop_outcomes):
     # Determined by polypharmacy definition
@@ -128,6 +161,7 @@ def compute_relative_risk(combi, pop_combis, pop_outcomes):
     rows_exposed = torch.where(
         (pop_combis[:, vec_indices] == 1).all(dim=1), True, False
     )
+    # print(rows_exposed)
 
     rows_control = torch.logical_not(rows_exposed)
 
@@ -137,14 +171,16 @@ def compute_relative_risk(combi, pop_combis, pop_outcomes):
     n_control_cases = pop_outcomes[rows_control].sum()
 
     rr = (n_exposed_cases / n_exposed) / (n_control_cases / n_control)
+    rr = rr.item()
 
     if isnan(rr):
         # Interpreted as 0 by experts
         return 0
+    elif isinf(rr):
+        return 100
 
     # Clip in a realistic range the RR so we don't end up with infinite RR
-    return torch.clip(rr, 0, 10)
-
+    return rr
 
 def change_to_closest_existing_vector(vec, set_existing_vecs):
     """1-NN search of `vec` in `set_existing_vecs`
