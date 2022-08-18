@@ -107,16 +107,6 @@ class DENeuralTSDiag:
 
         self.train_dataset.update_dataset()
 
-        # loader = DataLoader(
-        #     self.train_dataset,
-        #     batch_size=batch_size,
-        #     shuffle=shuffle,
-        #     sampler=sampler,
-        #     generator=torch.Generator(device=device),
-        #     drop_last=remainder_is_one,
-        #     # num_workers=using_cpu * num_cpus,
-        # )
-
         loader = FastTensorDataLoader(
             self.train_dataset.training_features,
             self.train_dataset.training_rewards,
