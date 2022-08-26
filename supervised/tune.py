@@ -8,7 +8,7 @@ from ray.tune.search.optuna import OptunaSearch
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import os
 
-sys.path.append("../..")
+sys.path.append("..")
 from networks import Network, VariableNet
 
 from fit_sup_utils import *
