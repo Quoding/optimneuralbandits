@@ -13,6 +13,15 @@ from utils import *
 from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
 from networks import Network
 
+using_cpu = True
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if device == torch.device("cuda"):
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
+    using_cpu = False
+
+num_cpus = len(os.sched_getaffinity(0))
+
+logging.basicConfig(level=logging.INFO)
 torch.set_num_threads(num_cpus)
 
 #### SET UP ####

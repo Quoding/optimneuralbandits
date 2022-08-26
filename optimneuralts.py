@@ -54,6 +54,7 @@ class DENeuralTSDiag:
     def get_sample(self, vec):
         mu, g_list = self.compute_activation_and_grad(vec)
         sigma = torch.tensor(0.0)
+
         sigma = sigma + torch.sum(g_list * g_list / self.U)
         sigma = torch.sqrt(self.nu * self.lambda_ * sigma)
 

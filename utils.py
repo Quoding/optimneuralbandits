@@ -15,16 +15,6 @@ from detorch import DE, Policy
 from detorch.config import Config, default_config
 from scipy.stats.contingency import relative_risk
 
-using_cpu = True
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if device == torch.device("cuda"):
-    torch.set_default_tensor_type("torch.cuda.FloatTensor")
-    using_cpu = False
-
-num_cpus = len(os.sched_getaffinity(0))
-
-logging.basicConfig(level=logging.INFO)
-
 
 class PullPolicy(Policy):
     """
@@ -115,7 +105,8 @@ class QuantileLoss(nn.Module):
         loss = torch.mean(torch.sum(torch.cat(losses, dim=1), dim=1))
 
         return loss
-    
+
+
 def sample_from_sql(con, table, num_samples, num_rows, columns):
     samples_idx = torch.randint(0, num_rows + 1, size=(num_samples,)).tolist()
     statement = f"SELECT {columns} FROM {table} WHERE ROWID IN {*samples_idx,}"
@@ -126,7 +117,8 @@ def sample_from_sql(con, table, num_samples, num_rows, columns):
     outcomes = sample[:, -1]
 
     return combis, outcomes
-    
+
+
 def get_table_stats(con, table):
     """Returns num_rows, num_cols, atc_col names for table `table`
 
@@ -181,6 +173,7 @@ def compute_relative_risk(combi, pop_combis, pop_outcomes):
 
     # Clip in a realistic range the RR so we don't end up with infinite RR
     return rr
+
 
 def change_to_closest_existing_vector(vec, set_existing_vecs):
     """1-NN search of `vec` in `set_existing_vecs`
