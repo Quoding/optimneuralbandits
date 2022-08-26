@@ -1,9 +1,0 @@
-810
-doing {'width': 32, 'hidden': 1, 'n_obs': 100, 'dataset': '50_rx_100000_combis_4_patterns_3', 'decay': 0, 'lr': 0.01, 'custom_layers': False}
-doing {'width': 32, 'hidden': 1, 'n_obs': 1000, 'dataset': '100_rx_100000_combis_10_patterns_35', 'decay': 0.01, 'lr': 0.01, 'custom_layers': False}
-doing {'width': 32, 'hidden': 1, 'n_obs': 10000, 'dataset': '1000_rx_100000_combis_10_patterns_25', 'decay': 0.1, 'lr': 0.01, 'custom_layers': False}
-doing {'width': 32, 'hidden': 2, 'n_obs': 1000, 'dataset': '100_rx_100000_combis_10_patterns_35', 'decay': 0, 'lr': 0.01, 'custom_layers': False}
-doing {'width': 32, 'hidden': 2, 'n_obs': 10000, 'dataset': '1000_rx_100000_combis_10_patterns_25', 'decay': 0.01, 'lr': 0.01, 'custom_layers': False}
-doing {'width': 32, 'hidden': 3, 'n_obs': 1000, 'dataset': '50_rx_100000_combis_4_patterns_3', 'decay': 0.1, 'lr': 0.01, 'custom_layers': False}
-doing {'width': 32, 'hidden': 3, 'n_obs': 10000, 'dataset': '1000_rx_100000_combis_10_patterns_25', 'decay': 0, 'lr': 0.01, 'custom_layers': False}
-doing {'width': 32, 'hidden': 4, 'n_obs': 1000, 'dataset': '50_rx_100000_combis_4_patterns_3', 'decay': 0.01, 'lr': 0.01, 'custom_layers': False}

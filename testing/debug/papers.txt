@@ -1,2 +1,0 @@
-Revisiting Small Batch Training for Deep Neural Networks https://arxiv.org/abs/1804.07612 
-Disciplined approach to NN HP: https://arxiv.org/pdf/1803.09820.pdf
