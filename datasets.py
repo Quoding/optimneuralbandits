@@ -2,16 +2,20 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset
 from torch.nn.functional import conv1d
-from utils import discretize_targets, build_histogram, gaussian_fn, device
+from utils import discretize_targets, build_histogram, gaussian_fn
 
 
 class ReplayDataset(Dataset):
-    def __init__(self, features=None, rewards=None):
+    def __init__(self, features=None, rewards=None, device=None):
         # Keep original in order to do LDS
         self.features = features
         self.rewards = rewards
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available else "cpu")
+        else:
+            self.device = torch.device(device)
 
-        # Actually used for training purposes, may be different from original avec LDS.
+        # Actually used for training purposes, may be different from original with LDS.
         self.training_features = features
         self.training_rewards = rewards
 

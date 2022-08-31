@@ -8,7 +8,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from datasets import ReplayDataset, ValidationReplayDataset, FastTensorDataLoader
-from utils import EarlyStopping, get_model_selection_loss, device, num_cpus, using_cpu
+from utils import EarlyStopping, get_model_selection_loss
 
 logging.basicConfig(level=logging.INFO)
 
