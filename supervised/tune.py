@@ -20,7 +20,7 @@ from fit_sup_utils import *
 # torch.set_default_tensor_type("torch.cuda.FloatTensor")
 # using_cpu = False
 
-num_cpus = len(os.sched_getaffinity(0))
+# num_cpus = len(os.sched_getaffinity(0))
 
 logging.basicConfig(level=logging.INFO)
 
@@ -66,11 +66,10 @@ def run_config(config):
     )
 
     X_train, y_train = training_data.combis, training_data.labels
-
     if custom_layers is not None:
         net = VariableNet(n_dim, custom_layers)
     else:
-        net = Network(n_dim, n_layers, n_outputs, width, None, batch_norm).to(device)
+        net = Network(n_dim, n_layers, n_outputs, width, None, batch_norm)
 
     if decay == "epoch":
         decay_val = 1
@@ -89,6 +88,7 @@ def run_config(config):
         else:
             optim = torch.optim.SGD(net.parameters(), lr=lr, weight_decay=decay_val)
 
+    test_loss_at_es = float("inf")
     for e in range(n_epochs):
         if decay == "epoch":
             optim.param_groups[0]["weight_decay"] = 1 / (e + 1)
@@ -107,11 +107,13 @@ def run_config(config):
             # Compute losses
             test_activ = net(X_test)
             test_loss = criterion(test_activ, y_test)
-            session.report({"test_loss": test_loss.item()})
 
             val_activ = net(X_val)
             val_loss = criterion(val_activ, y_val)
 
+            retval = early_stopping(val_loss, train_activ, val_activ, test_activ)
+            if retval:
+                test_loss_at_es = test_loss.item()
             net.train()
 
             # Update LR scheduler
@@ -120,6 +122,8 @@ def run_config(config):
 
         if early_stopping.early_stop:
             break
+
+    session.report({"test_loss": test_loss_at_es})
 
 
 seed = 42
@@ -137,24 +141,22 @@ search_space = {
     "width": tune.choice([128]),
     "hidden": tune.choice([1]),
     "n_obs": tune.choice([100, 1000, 10000, 20000]),
-    "decay": tune.choice([0.01, 0.001, 0.0001, 0, "epoch"]),
-    "lr": tune.choice([0.001, 0.01, 0.1, "plateau"]),
-    "lds": tune.choice([True]),
+    "decay": tune.choice([0.1, 0.01, 0.001, 0.0001, 0]),
+    "lr": tune.choice([0.0001, 0.001, 0.01, 0.1, "plateau"]),
+    "lds": tune.choice([True, None]),
     "batch_size": tune.choice([64, 128, 256, 512, 1024]),
     "batch_norm": tune.choice([True, False]),
     "patience": tune.choice([10, 25, 50]),
     "validation": tune.choice([None, "bins", "extrema"]),
     "optim": tune.choice(["adam", "sgd"]),
 }
-algo = OptunaSearch()
 
 tuner = tune.Tuner(
     run_config,
     tune_config=tune.TuneConfig(
         metric="test_loss",
         mode="min",
-        search_alg=algo,
-        scheduler=ASHAScheduler(),
+        search_alg=OptunaSearch(),
         num_samples=1000,
     ),
     param_space=search_space,
@@ -163,5 +165,9 @@ tuner = tune.Tuner(
 results = tuner.fit()
 
 df = results.get_dataframe()
+
+config_cols = [col for col in df.columns if "config" in col]
+df = df.sort_values("test_loss", ascending=False)
+df = df.drop_duplicates(subset=config_cols)
 df = df.nsmallest(10, columns="test_loss")
 df.to_csv("tuner_top10.csv")
