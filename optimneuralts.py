@@ -76,7 +76,7 @@ class DENeuralTSDiag:
         lr=1e-2,
         batch_size=-1,
         patience=25,
-        lds="sqrt_inv",
+        lds=True,
         n_train=-1,
         use_decay=False,
     ):
@@ -101,8 +101,6 @@ class DENeuralTSDiag:
                 self.net.parameters(), lr=float(lr), weight_decay=weight_decay
             )
 
-        shuffle = True
-        remainder_is_one = (n_dataset % batch_size) == 1
         if lds:
             self.train_dataset.update_weights(reweight=lds)
 
@@ -112,7 +110,7 @@ class DENeuralTSDiag:
             self.train_dataset.training_features,
             self.train_dataset.training_rewards,
             batch_size=batch_size,
-            shuffle=shuffle,
+            shuffle=True,
         )
 
         early_stop = EarlyStopping(patience)
