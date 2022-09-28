@@ -275,9 +275,9 @@ l = [
     "all_flagged_risks",
 ]
 
-try:
+if len(all_flagged_combis_idx) > 0:
     all_flagged_risks = risks[torch.tensor(list(all_flagged_combis_idx))]
-except IndexError as e:
+else:  # Should be IndexError but CC clusters seem to error in C, not in Python
     logging.info("No flagged combination during the entire experiment")
     logging.info("all_flagged_risks is now an empty tensor")
     all_flagged_risks = torch.tensor([])
