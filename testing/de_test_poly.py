@@ -92,11 +92,11 @@ net = Network(
 ).to(device)
 
 #### METRICS ####
+recalls = []
 precisions = []
-ratio_apps = []
 ratio_found_pats = []
+recalls_alls = []
 precisions_alls = []
-ratio_apps_alls = []
 ratio_found_pats_alls = []
 n_inter_alls = []
 losses = []
@@ -165,12 +165,12 @@ logging.info("Warm up over. Computing metrics...")
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
 (
+    recall,
     precision,
-    ratio_app,
     percent_found_pat,
     n_inter,
+    recall_all,
     precision_all,
-    ratio_app_all,
     percent_found_pat_all,
     n_inter_all,
     all_flagged_combis_idx,
@@ -186,16 +186,16 @@ logging.info("Warm up over. Computing metrics...")
     all_flagged_pats_idx,
 )
 logging.info(
-    f"precision: {precision}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+    f"recall: {recall}, precision: {precision}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
 )
 logging.info(
-    f"precision all: {precision_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
+    f"recall all: {recall_all}, precision all: {precision_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
 )
+recalls.append(recall)
 precisions.append(precision)
-ratio_apps.append(ratio_app)
 ratio_found_pats.append(percent_found_pat)
+recalls_alls.append(recall_all)
 precisions_alls.append(precision_all)
-ratio_apps_alls.append(ratio_app_all)
 ratio_found_pats_alls.append(percent_found_pat_all)
 n_inter_alls.append(n_inter_all)
 losses.append(loss)
@@ -233,12 +233,12 @@ for i in range(n_trials):
     #### COMPUTE METRICS ####
     if (i + 1) % 200 == 0:
         (
+            recall,
             precision,
-            ratio_app,
             percent_found_pat,
             n_inter,
+            recall_all,
             precision_all,
-            ratio_app_all,
             percent_found_pat_all,
             n_inter_all,
             all_flagged_combis_idx,
@@ -259,34 +259,34 @@ for i in range(n_trials):
             dataset_loss = agent.loss_func(dataset_activ, risks)
             dataset_losses.append(dataset_loss.item())
 
+        recalls.append(recall)
         precisions.append(precision)
-        ratio_apps.append(ratio_app)
         ratio_found_pats.append(percent_found_pat)
+        recalls_alls.append(recall_all)
         precisions_alls.append(precision_all)
-        ratio_apps_alls.append(ratio_app_all)
         ratio_found_pats_alls.append(percent_found_pat_all)
         n_inter_alls.append(n_inter_all)
 
         losses.append(loss)
 
         logging.info(
-            f"trial: {i + 1}, precision: {precision}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
+            f"trial: {i + 1}, recall: {recall}, precision: {precision}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
         )
         logging.info(
-            f"precision all: {precision_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
+            f"recall all: {recall_all}, precision all: {precision_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
         )
 
 
 output_dir = args.output
 l = [
     "agents",
+    "recalls",
     "precisions",
-    "ratio_apps",
     "ratio_found_pats",
     "losses",
     "dataset_losses",
+    "recalls_alls",
     "precisions_alls",
-    "ratio_apps_alls",
     "ratio_found_pats_alls",
     "n_inter_alls",
     "all_flagged_combis_idx",
@@ -304,13 +304,13 @@ for item in l:
     os.makedirs(f"{output_dir}/{item}/", exist_ok=True)
 
 torch.save(agent, f"{output_dir}/agents/{seed}.pth")
+torch.save(recalls, f"{output_dir}/recalls/{seed}.pth")
 torch.save(precisions, f"{output_dir}/precisions/{seed}.pth")
-torch.save(ratio_apps, f"{output_dir}/ratio_apps/{seed}.pth")
 torch.save(ratio_found_pats, f"{output_dir}/ratio_found_pats/{seed}.pth")
 torch.save(losses, f"{output_dir}/losses/{seed}.pth")
 torch.save(dataset_losses, f"{output_dir}/dataset_losses/{seed}.pth")
+torch.save(recalls_alls, f"{output_dir}/recalls_alls/{seed}.pth")
 torch.save(precisions_alls, f"{output_dir}/precisions_alls/{seed}.pth")
-torch.save(ratio_apps_alls, f"{output_dir}/ratio_apps_alls/{seed}.pth")
 torch.save(ratio_found_pats_alls, f"{output_dir}/ratio_found_pats_alls/{seed}.pth")
 torch.save(n_inter_alls, f"{output_dir}/n_inter_alls/{seed}.pth")
 torch.save(all_flagged_risks, f"{output_dir}/all_flagged_risks/{seed}.pth")

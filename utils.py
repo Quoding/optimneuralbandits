@@ -624,19 +624,19 @@ def compute_metrics(
 
     Returns:
         tuple: tuple of metrics and updated tensors in the following order:
+        recall for current step,
         precision for current step,
-        ratio_app for current step,
         percent_found_pat for current step,
         n_inter for current step,
+        recall for all steps so far,
         precision for all steps so far,
-        ratio_app for all steps so far,
         percent_found_pat for all steps so far,
         n_inter for all steps so far,
         updated all flagged combis,
         updated all flagged pats,
     """
 
-    # Parmis tous les vecteurs "existant", lesquels je trouve ? (Jaccard, ratio_app)
+    # Parmis tous les vecteurs "existant", lesquels je trouve ? (Jaccard, precision)
     sol_idx, _, _ = agent.find_solution_in_vecs(combis, thresh, n_sigmas)
 
     all_flagged_combis_idx.update(sol_idx)
@@ -661,26 +661,26 @@ def compute_metrics(
 
     # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
     if len(sol_idx) == 0:
-        ratio_app = float("nan")
         precision = float("nan")
+        recall = float("nan")
     else:
-        ratio_app = n_inter / len(sol_idx)
-        precision = n_inter / len(true_sol_idx)
+        precision = n_inter / len(sol_idx)
+        recall = n_inter / len(true_sol_idx)
 
     if len(all_flagged_combis_idx) == 0:
-        ratio_app_all = float("nan")
         precision_all = float("nan")
+        recall_all = float("nan")
     else:
-        ratio_app_all = n_inter_all / len(all_flagged_combis_idx)
-        precision = n_inter_all / len(true_sol_idx)
+        precision_all = n_inter_all / len(all_flagged_combis_idx)
+        recall = n_inter_all / len(true_sol_idx)
 
     return (
+        recall,
         precision,
-        ratio_app,
         percent_found_pat,
         n_inter,
+        recall_all,
         precision_all,
-        ratio_app_all,
         percent_found_pat_all,
         n_inter_all,
         all_flagged_combis_idx,
