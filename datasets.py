@@ -11,7 +11,7 @@ class ReplayDataset(Dataset):
         self.features = features
         self.rewards = rewards
         if device is None:
-            self.device = torch.device("cuda" if torch.cuda.is_available else "cpu")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
             self.device = torch.device(device)
 
@@ -59,7 +59,7 @@ class ReplayDataset(Dataset):
         discrete_risks = discretize_targets(flat_labels, factor)
 
         hist, n_bins, list_bin_edges = build_histogram(flat_labels, factor, bin_size)
-        weights = hist.hist.to(device)
+        weights = hist.hist.to(self.device)
 
         if reweight == "sqrt_inv":
             weights = torch.sqrt(weights)

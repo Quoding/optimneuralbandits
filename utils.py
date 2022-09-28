@@ -57,7 +57,7 @@ class PullPolicy(Policy):
         return self.sample_r
 
     def transform(self):
-        vec = torch.clip(self.params, *PullPolicy.bounds).to(device)
+        vec = torch.clip(self.params, *PullPolicy.bounds)
         self.params = nn.Parameter(vec, requires_grad=False)
 
 
@@ -278,17 +278,11 @@ def make_deterministic(seed=42):
     random.seed(seed)
 
 
-def compute_jaccard(found_solution: set, true_solution: set):
-    n_in_inter = 0
-
+def get_n_inter(found_solution: set, true_solution: set):
     intersection = found_solution & true_solution
-
     n_in_inter = len(intersection)
 
-    return (
-        n_in_inter / (len(found_solution) + len(true_solution) - n_in_inter),
-        n_in_inter,
-    )
+    return n_in_inter
 
 
 def parse_args():
@@ -630,11 +624,11 @@ def compute_metrics(
 
     Returns:
         tuple: tuple of metrics and updated tensors in the following order:
-        jaccard for current step,
+        precision for current step,
         ratio_app for current step,
         percent_found_pat for current step,
         n_inter for current step,
-        jaccard for all steps so far,
+        precision for all steps so far,
         ratio_app for all steps so far,
         percent_found_pat for all steps so far,
         n_inter for all steps so far,
@@ -653,11 +647,9 @@ def compute_metrics(
     all_flagged_pats_idx.update(sol_pat_idx)
 
     # À quel point ma solution trouvée parmis les vecteurs du dataset est similaire à la vraie solution
-    jaccard, n_inter = compute_jaccard(
-        sol_idx, true_sol_idx
-    )  # Jaccard for the current step
+    n_inter = get_n_inter(sol_idx, true_sol_idx)  # Jaccard for the current step
 
-    jaccard_all, n_inter_all = compute_jaccard(
+    n_inter_all = get_n_inter(
         all_flagged_combis_idx, true_sol_idx
     )  # Jaccard for all steps before + this one if we keep all previous solutions
 
@@ -670,20 +662,24 @@ def compute_metrics(
     # A quel point ma solution trouvee parmis les vecteurs du dataset est dans la vraie solution
     if len(sol_idx) == 0:
         ratio_app = float("nan")
+        precision = float("nan")
     else:
         ratio_app = n_inter / len(sol_idx)
+        precision = n_inter / len(true_sol_idx)
 
     if len(all_flagged_combis_idx) == 0:
         ratio_app_all = float("nan")
+        precision_all = float("nan")
     else:
         ratio_app_all = n_inter_all / len(all_flagged_combis_idx)
+        precision = n_inter_all / len(true_sol_idx)
 
     return (
-        jaccard,
+        precision,
         ratio_app,
         percent_found_pat,
         n_inter,
-        jaccard_all,
+        precision_all,
         ratio_app_all,
         percent_found_pat_all,
         n_inter_all,
@@ -721,7 +717,7 @@ def build_histogram(targets, factor, bin_size):
 def gaussian_fn(size, std):
     n = torch.arange(0, size) - (size - 1.0) / 2.0
     sig2 = 2 * std * std
-    w = torch.exp(-(n**2) / sig2)
+    w = torch.exp(-(n ** 2) / sig2)
     return w
 
 
