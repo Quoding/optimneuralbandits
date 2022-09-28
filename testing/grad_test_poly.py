@@ -78,10 +78,10 @@ net = Network(
 ).to(device)
 
 #### METRICS ####
-jaccards = []
+precisions = []
 ratio_apps = []
 ratio_found_pats = []
-jaccards_alls = []
+precisions_alls = []
 ratio_apps_alls = []
 ratio_found_pats_alls = []
 n_inter_alls = []
@@ -151,11 +151,11 @@ logging.info("Warm up over. Computing metrics...")
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
 (
-    jaccard,
+    precision,
     ratio_app,
     percent_found_pat,
     n_inter,
-    jaccard_all,
+    precision_all,
     ratio_app_all,
     percent_found_pat_all,
     n_inter_all,
@@ -172,15 +172,15 @@ logging.info("Warm up over. Computing metrics...")
     all_flagged_pats_idx,
 )
 logging.info(
-    f"jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
+    f"precision: {precision}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
 )
 logging.info(
-    f"jaccard all: {jaccard_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
+    f"precision all: {precision_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
 )
-jaccards.append(jaccard)
+precisions.append(precision)
 ratio_apps.append(ratio_app)
 ratio_found_pats.append(percent_found_pat)
-jaccards_alls.append(jaccard_all)
+precisions_alls.append(precision_all)
 ratio_apps_alls.append(ratio_app_all)
 ratio_found_pats_alls.append(percent_found_pat_all)
 n_inter_alls.append(n_inter_all)
@@ -215,11 +215,11 @@ for i in range(n_trials):
     #### COMPUTE METRICS ####
     if (i + 1) % 200 == 0:
         (
-            jaccard,
+            precision,
             ratio_app,
             percent_found_pat,
             n_inter,
-            jaccard_all,
+            precision_all,
             ratio_app_all,
             percent_found_pat_all,
             n_inter_all,
@@ -241,10 +241,10 @@ for i in range(n_trials):
             dataset_loss = agent.loss_func(dataset_activ, risks)
             dataset_losses.append(dataset_loss.item())
 
-        jaccards.append(jaccard)
+        precisions.append(precision)
         ratio_apps.append(ratio_app)
         ratio_found_pats.append(percent_found_pat)
-        jaccards_alls.append(jaccard_all)
+        precisions_alls.append(precision_all)
         ratio_apps_alls.append(ratio_app_all)
         ratio_found_pats_alls.append(percent_found_pat_all)
         n_inter_alls.append(n_inter_all)
@@ -252,22 +252,22 @@ for i in range(n_trials):
         losses.append(loss)
 
         logging.info(
-            f"trial: {i + 1}, jaccard: {jaccard}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
+            f"trial: {i + 1}, precision: {precision}, ratio_app: {ratio_app}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}, loss: {loss}, dataset_loss: {dataset_loss}"
         )
         logging.info(
-            f"jaccard all: {jaccard_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
+            f"precision all: {precision_all}, ratio_app all: {ratio_app_all}, ratio of patterns found all: {percent_found_pat_all}, n_inter all: {n_inter_all}"
         )
 
 
 output_dir = args.output
 l = [
     "agents",
-    "jaccards",
+    "precisions",
     "ratio_apps",
     "ratio_found_pats",
     "losses",
     "dataset_losses",
-    "jaccards_alls",
+    "precisions_alls",
     "ratio_apps_alls",
     "ratio_found_pats_alls",
     "n_inter_alls",
@@ -275,19 +275,23 @@ l = [
     "all_flagged_risks",
 ]
 
-print(torch.tensor(list(all_flagged_combis_idx)))
-all_flagged_risks = risks[torch.tensor(list(all_flagged_combis_idx))]
+try:
+    all_flagged_risks = risks[torch.tensor(list(all_flagged_combis_idx))]
+except IndexError as e:
+    logging.info("No flagged combination during the entire experiment")
+    logging.info("all_flagged_risks is now an empty tensor")
+    all_flagged_risks = torch.tensor([])
 
 for item in l:
     os.makedirs(f"{output_dir}/{item}/", exist_ok=True)
 
 torch.save(agent, f"{output_dir}/agents/{seed}.pth")
-torch.save(jaccards, f"{output_dir}/jaccards/{seed}.pth")
+torch.save(precisions, f"{output_dir}/precisions/{seed}.pth")
 torch.save(ratio_apps, f"{output_dir}/ratio_apps/{seed}.pth")
 torch.save(ratio_found_pats, f"{output_dir}/ratio_found_pats/{seed}.pth")
 torch.save(losses, f"{output_dir}/losses/{seed}.pth")
 torch.save(dataset_losses, f"{output_dir}/dataset_losses/{seed}.pth")
-torch.save(jaccards_alls, f"{output_dir}/jaccards_alls/{seed}.pth")
+torch.save(precisions_alls, f"{output_dir}/precisions_alls/{seed}.pth")
 torch.save(ratio_apps_alls, f"{output_dir}/ratio_apps_alls/{seed}.pth")
 torch.save(ratio_found_pats_alls, f"{output_dir}/ratio_found_pats_alls/{seed}.pth")
 torch.save(n_inter_alls, f"{output_dir}/n_inter_alls/{seed}.pth")
