@@ -207,9 +207,10 @@ for i in range(n_trials):
     best_member = find_best_member(
         agent.get_sample, de_config, init_probas, combis, i, ci_thresh, thresh, n_sigmas
     )
-    best_member_grad = best_member.activation_grad
+    # best_member_grad = best_member.activation_grad
     a_t = best_member.params.data
     a_t, idx = change_to_closest_existing_vector(a_t, combis)
+    _, best_member_grad = agent.compute_activation_and_grad(a_t)
 
     r_t, true_r = reward_fn(idx)
     r_t = r_t[:, None]
