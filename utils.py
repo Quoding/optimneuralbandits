@@ -672,7 +672,7 @@ def compute_metrics(
         recall_all = float("nan")
     else:
         precision_all = n_inter_all / len(all_flagged_combis_idx)
-        recall = n_inter_all / len(true_sol_idx)
+        recall_all = n_inter_all / len(true_sol_idx)
 
     return (
         recall,
