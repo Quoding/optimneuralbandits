@@ -71,18 +71,13 @@ class DEConfig:
     seed: int = "doesn't matter"
 
 
-# combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset, "testing/datasets")
 combis, risks, pat_vecs, n_obs, n_dim = load_dataset(dataset)
 init_probas = torch.tensor([1 / len(combis)] * len(combis))
 
 reward_fn = lambda idx: (
-    risks[idx],
+    risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
     risks[idx],
 )
-# reward_fn = lambda idx: (
-#     risks[idx] + torch.normal(torch.tensor([0.0]), torch.tensor([0.1])),
-#     risks[idx],
-# )
 
 #### SET UP NETWORK AND DE ####
 de_config = DEConfig
@@ -212,6 +207,14 @@ for i in range(n_trials):
     a_t, idx = change_to_closest_existing_vector(a_t, combis)
     _, best_member_grad = agent.compute_activation_and_grad(a_t)
 
+    # print(best_member.activation_grad)
+    # print(best_member_grad)
+    # print(torch.linalg.norm(best_member.activation_grad))
+    # print(torch.linalg.norm(best_member_grad))
+    # print(f"{torch.linalg.norm(a_t.flatten() - best_member.params.data, ord=1)=}")
+    # print(f"{a_t.sum()=}")
+    # print(f"{best_member.params.data.sum()=}")
+    # print("=======")
     r_t, true_r = reward_fn(idx)
     r_t = r_t[:, None]
     agent.U += best_member_grad * best_member_grad
