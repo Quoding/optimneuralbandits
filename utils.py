@@ -523,69 +523,6 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     return a_t, idx, g_list
 
 
-def do_gradient_optim_old(agent, n_steps, existing_vecs, lr):
-    # Generate a random vector to optimize
-    sample_idx = random.randint(
-        0, len(existing_vecs) - 1
-    )  # random.randint includes upper bound...
-    input_vec = existing_vecs[sample_idx][None].clone()
-    input_vec.requires_grad = True
-    optimizer = torch.optim.Adam([input_vec], lr=lr)
-
-    population = input_vec.detach().clone()
-    population_values = []
-    # Do n_steps gradient steps, optimizing a noisy sample from the distribution of the input_vec
-    for i in range(n_steps):
-        print(len(torch.where(input_vec > 0)[1]))
-        # Clear gradients for sample
-        optimizer.zero_grad(set_to_none=True)
-        agent.net.zero_grad(set_to_none=True)
-
-        # Evaluate
-        sample_r, g_list, mu, cb = agent.get_sample(input_vec)
-        # Clear gradient from sampling because a backprop happens in there
-        optimizer.zero_grad(set_to_none=True)
-        agent.net.zero_grad(set_to_none=True)
-
-        # Record input_vecs and values in the population
-        population_values.append(sample_r.item())
-
-        # Backprop
-        sample_r = -sample_r
-        sample_r.backward()
-        # print(agent.net.fc1.weight.grad)
-        # input()
-        optimizer.step()
-
-        population = torch.cat((population, input_vec.detach().clone()))
-
-    # Clear gradients for sample
-    optimizer.zero_grad(set_to_none=True)
-    agent.net.zero_grad(set_to_none=True)
-    # Record final optimized input_vecs in population since they're the last optimizer steps product
-    sample_r, g_list, mu, cb = agent.get_sample(input_vec)
-
-    population_values.append(sample_r.item())
-
-    # Clean up grad before exiting
-    optimizer.zero_grad(set_to_none=True)
-    agent.net.zero_grad(set_to_none=True)
-    population_values = torch.tensor(population_values)
-
-    # Find the best generated vector
-    max_idx = torch.argmax(population_values)
-    best_vec = population[max_idx]
-
-    # Coerce to an existing vector via L1 norm
-    a_t, idx = change_to_closest_existing_vector(best_vec, existing_vecs)
-    # print(a_t.shape)
-    _, g_list = agent.compute_activation_and_grad(a_t)
-    # print(best_vec)
-    # print(a_t)
-    # input()
-    return a_t, idx, g_list
-
-
 def load_dataset(dataset_name, path_to_dataset="datasets"):
 
     dataset = pd.read_csv(f"{path_to_dataset}/combinations/{dataset_name}.csv")
