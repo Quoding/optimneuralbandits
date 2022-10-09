@@ -149,14 +149,14 @@ agent.net.eval()
 logging.info("Warm up over. Computing metrics...")
 
 ## VISUALIZE REPRESENTATION AFTER WARMUP ###
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
 
-# with torch.no_grad():
-#     plt.scatter(risks.cpu().numpy(), agent.net(combis).cpu().numpy())
-#     plt.plot([0, 4], [0, 4], color="black", linestyle="dashed")
-#     plt.xlim(0, 4)
-#     plt.ylim(0, 4)
-#     plt.show()
+with torch.no_grad():
+    plt.scatter(risks.cpu().numpy(), agent.net(combis).cpu().numpy())
+    plt.plot([0, 4], [0, 4], color="black", linestyle="dashed")
+    plt.xlim(0, 4)
+    plt.ylim(0, 4)
+    plt.show()
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
 (
@@ -202,19 +202,12 @@ for i in range(n_trials):
     best_member = find_best_member(
         agent.get_sample, de_config, init_probas, combis, i, ci_thresh, thresh, n_sigmas
     )
-    # best_member_grad = best_member.activation_grad
-    a_t = best_member.params.data
-    a_t, idx = change_to_closest_existing_vector(a_t, combis)
-    _, best_member_grad = agent.compute_activation_and_grad(a_t)
 
-    # print(best_member.activation_grad)
-    # print(best_member_grad)
-    # print(torch.linalg.norm(best_member.activation_grad))
-    # print(torch.linalg.norm(best_member_grad))
-    # print(f"{torch.linalg.norm(a_t.flatten() - best_member.params.data, ord=1)=}")
-    # print(f"{a_t.sum()=}")
-    # print(f"{best_member.params.data.sum()=}")
-    # print("=======")
+    best_member_grad = best_member.activation_grad
+    a_t = best_member.params.data
+    # Bind to dataset so NN does not learn noise
+    a_t, idx = change_to_closest_existing_vector(a_t, combis)
+
     r_t, true_r = reward_fn(idx)
     r_t = r_t[:, None]
     agent.U += best_member_grad * best_member_grad
