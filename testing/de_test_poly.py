@@ -149,14 +149,14 @@ agent.net.eval()
 logging.info("Warm up over. Computing metrics...")
 
 ## VISUALIZE REPRESENTATION AFTER WARMUP ###
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 
-with torch.no_grad():
-    plt.scatter(risks.cpu().numpy(), agent.net(combis).cpu().numpy())
-    plt.plot([0, 4], [0, 4], color="black", linestyle="dashed")
-    plt.xlim(0, 4)
-    plt.ylim(0, 4)
-    plt.show()
+# with torch.no_grad():
+#     plt.scatter(risks.cpu().numpy(), agent.net(combis).cpu().numpy())
+#     plt.plot([0, 4], [0, 4], color="black", linestyle="dashed")
+#     plt.xlim(0, 4)
+#     plt.ylim(0, 4)
+#     plt.show()
 
 ## GET METRICS POST WARMUP, PRE TRAINING ####
 (
