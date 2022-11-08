@@ -2,11 +2,15 @@
 *.pth
 testing/datasets/combinations/*.csv
 testing/datasets/patterns/*.json
-testing/viz/images/*
-testing/saves/*
-.vscode
+**/metrics
+**/saves
+**/runs
+**/images
 testing/debug/
-
+.vscode
+*.gv*
+testing/debug/images/
+# testing/debug/runs/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
