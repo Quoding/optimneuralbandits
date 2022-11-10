@@ -1,5 +1,5 @@
 # optimneuralbandits
-Neural Bandits with Differential Evolution (possibly other optimizers, the code is pretty agnostic in that regard), to generate candidate vectors to evaluate/pull
+Neural Bandits with an optimizer to generate a set of contexts to evaluate at every turn (possibly other optimizers, the code is pretty agnostic in that regard), to generate candidate vectors to evaluate/pull
 
 Original versions of NeuralUCB / TS that are modified here: https://github.com/uclaml/NeuralTS
 
