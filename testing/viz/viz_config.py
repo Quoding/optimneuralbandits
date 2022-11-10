@@ -1,9 +1,48 @@
 import matplotlib.pyplot as plt
 
-plt.rcParams["figure.figsize"] = (7, 5)  # default = (6.4, 4.8)
-plt.rcParams["text.usetex"] = True
-plt.rcParams["figure.dpi"] = 140  # default = 100
-plt.rcParams["font.family"] = "serif"
-# plt.rcParams["text.latex.preamble"] = [r"\usepackage{amsmath}"]
 plt.style.use("ggplot")
-title_font_size = "10"
+
+plt.rcParams.update(
+    {
+        "text.usetex": True,
+        "font.family": "serif",
+        # "font.sans-serif": "Computer Modern",
+    }
+)
+
+
+def set_size(width, fraction=1):
+    """Set figure dimensions to avoid scaling in LaTeX.
+
+    Parameters
+    ----------
+    width: float
+            Document textwidth or columnwidth in pts
+    fraction: float, optional
+            Fraction of the width which you wish the figure to occupy
+
+    Returns
+    -------
+    fig_dim: tuple
+            Dimensions of figure in inches
+    """
+    if width == "aaai":
+        width = 239.39438
+    # Width of figure (in pts)
+    fig_width_pt = width * fraction
+
+    # Convert from pt to inches
+    inches_per_pt = 1 / 72.27
+
+    # Golden ratio to set aesthetic figure height
+    # https://disq.us/p/2940ij3
+    golden_ratio = (5 ** 0.5 - 1) / 2
+
+    # Figure width in inches
+    fig_width_in = fig_width_pt * inches_per_pt
+    # Figure height in inches
+    fig_height_in = fig_width_in * golden_ratio
+
+    fig_dim = (fig_width_in, fig_height_in)
+
+    return fig_dim

@@ -13,7 +13,7 @@ from utils import EarlyStopping, get_model_selection_loss
 logging.basicConfig(level=logging.INFO)
 
 
-class DENeuralTSDiag:
+class OptimNeuralTS:
     def __init__(
         self,
         net,
@@ -186,7 +186,7 @@ class DENeuralTSDiag:
         return (solution_idx, mus, sigmas)
 
 
-class LenientDENeuralTSDiag(DENeuralTSDiag):
+class LenientOptimNeuralTS(OptimNeuralTS):
     def __init__(self, reward_sample_thresholds, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.reward_sample_thresholds = reward_sample_thresholds

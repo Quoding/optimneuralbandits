@@ -10,7 +10,7 @@ import torch
 from utils import *
 
 sys.path.append("..")
-from optimneuralts import DENeuralTSDiag, LenientDENeuralTSDiag
+from optimneuralts import OptimNeuralTS, LenientOptimNeuralTS
 
 
 #### SET UP ####
@@ -68,7 +68,7 @@ n_combis_in_sol = len(combis_in_sol)
 
 logging.info(f"There are {n_combis_in_sol} combinations in the solution set")
 
-agent = LenientDENeuralTSDiag(
+agent = LenientOptimNeuralTS(
     (0, thresh), net, optim_string, nu=exploration_mult, lamdba=reg, style=style
 )
 
