@@ -4,8 +4,8 @@ Neural Bandits with an optimizer to generate a set of contexts to evaluate at ev
 Original versions of NeuralUCB / TS that are modified here: https://github.com/uclaml/NeuralTS
 
 Includes:
-* Vanilla NeuralTS and NeuralUCB
-* NeuralTS with Dropout TS
+* NeuralTS and NeuralUCB
+* NeuralTS with Dropout
 * NeuralTS with Lenient Regret
 
 
