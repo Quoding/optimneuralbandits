@@ -1,16 +1,16 @@
 import json
 import logging
-import sys
 import os
+import sys
 
 import numpy as np
 import pandas as pd
 import torch
 
 sys.path.append("..")
-from utils import *
-from optimneuralts import OptimNeuralTS, LenientOptimNeuralTS
 from networks import Network
+from optimneuralts import OptimNeuralTS
+from utils import *
 
 using_cpu = True
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

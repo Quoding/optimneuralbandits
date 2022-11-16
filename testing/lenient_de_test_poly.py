@@ -1,7 +1,7 @@
 import json
 import logging
-import sys
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -10,8 +10,7 @@ import torch
 from utils import *
 
 sys.path.append("..")
-from optimneuralts import OptimNeuralTS, LenientOptimNeuralTS
-
+from optimneuralts import LenientOptimNeuralTS
 
 #### SET UP ####
 args = parse_args()
