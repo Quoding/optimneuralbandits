@@ -1,16 +1,48 @@
 import logging
 import types
 from copy import deepcopy
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader, WeightedRandomSampler
 
-from datasets import ReplayDataset, ValidationReplayDataset, FastTensorDataLoader
+from datasets import FastTensorDataLoader, ReplayDataset, ValidationReplayDataset
 from utils import EarlyStopping, get_model_selection_loss
 
 logging.basicConfig(level=logging.INFO)
+
+
+class SingleVoteBinaryEnsemble:
+    def __init__(self, ensemble: list = []):
+        self.ensemble = ensemble
+
+    def add_model(self, model):
+        """Add a model to the ensemble
+
+        Args:
+            model (torch.nn.Module): model to add to the ensemble
+        """
+        self.ensemble.append(model)
+
+    def classify(self, x, threshold=1.1):
+        """Classify whether the input's pred is above or under treshold
+
+        Args:
+            x (torch.Tensor): input
+            threshold (float, optional): Threshold to dichotomize prediction. Defaults to 1.1.
+
+        Returns:
+            bool: True if input's pred is above threshold, False otherwise
+        """
+        preds = []
+        with torch.no_grad():
+            for model in self.ensemble:
+                preds.append(model(x))
+
+        preds = torch.cat(preds, axis=1)
+        return (preds > threshold).any(axis=1)
 
 
 class OptimNeuralTS:
@@ -39,6 +71,8 @@ class OptimNeuralTS:
         self.train_dataset = ReplayDataset()
         self.val_dataset = ValidationReplayDataset(valtype=valtype)
         self.valtype = valtype
+
+        self.ensemble = SingleVoteEnsemble()
 
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
@@ -150,6 +184,7 @@ class OptimNeuralTS:
         # Set the net to the best in model selection loss we've seen
         # Deep copy to ensure no remaining references to the early_stop object
         self.net = deepcopy(early_stop.best_model)
+        self.ensemble.add_model(deepcopy(self.net))
         return stored_loss.detach().item()
 
     def find_solution_in_vecs(self, vecs, thresh, n_sigmas):
