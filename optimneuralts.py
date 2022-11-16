@@ -72,7 +72,7 @@ class OptimNeuralTS:
         self.val_dataset = ValidationReplayDataset(valtype=valtype)
         self.valtype = valtype
 
-        self.ensemble = SingleVoteEnsemble()
+        self.ensemble = SingleVoteBinaryEnsemble()
 
         optimizers = {"sgd": optim.SGD, "adam": optim.Adam}
         # Keep optimizer separate from DENeuralTS class to tune lr as we go through timesteps if we so desire
