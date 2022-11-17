@@ -1,6 +1,7 @@
 import logging
 import types
 from copy import deepcopy
+from math import sqrt
 
 import torch
 import torch.nn as nn
@@ -109,8 +110,8 @@ class OptimNeuralTS:
         n_epochs,
         lr=1e-2,
         batch_size=-1,
-        patience=25,
-        lds=True,
+        patience=-1,
+        lds=False,
         n_train=-1,
         use_decay=False,
     ):
@@ -120,6 +121,8 @@ class OptimNeuralTS:
             batch_size = n_dataset
         if n_train == -1:
             n_train = n_dataset
+        if patience == -1:
+            patience = n_epochs
         # Setup
         # self.len += 1
         self.len = n_dataset
@@ -157,6 +160,7 @@ class OptimNeuralTS:
             )
         else:
             X_val, y_val = self.val_dataset.features, self.val_dataset.rewards
+        self.net.train()
         # Train loop
         for _ in range(n_epochs):
             for X, y in loader:
@@ -198,7 +202,6 @@ class OptimNeuralTS:
         Returns:
             tensor: torch.Tensor of torch.Tensor of the solution
         """
-
         solution_idx = set()
         mus = []
         sigmas = []
@@ -217,6 +220,41 @@ class OptimNeuralTS:
 
             mus.append(mu.item())
             sigmas.append(n_sigmas * sigma.item())
+
+        return (solution_idx, mus, sigmas)
+
+    def dropout_find_solution_in_vecs(self, vecs, thresh, n_sigmas, mc_iters=100):
+        """Find the idx of input `vecs` that have a predicted lower bound value above `thresh` via MC Dropout.
+
+        Args:
+            vecs (torch.Tensor): Input tensors
+            thresh (float): Discrimination threshold
+            n_sigmas (float): Number of sigmas to consider for lower confidence bound
+            mc_iters (int): Number of Monte Carlo iterations to perform
+
+        Returns:
+            tuple: tuple containing idx of solution, the predicted mean and the `n_sigma` confidence around the mean
+        """
+        assert self.sampletype == "f"
+        import logging
+
+        mus = []
+        sigmas = []
+        # First pass, weed out vectors with small activs so we don't waste time in the loop to extract solutions
+        activs = [self.net(vecs) for _ in range(mc_iters)]
+        activs = torch.cat(activs, dim=1)
+        logging.info(activs)
+
+        means = activs.mean(dim=1)
+        logging.info(means)
+        confidences = activs.std(dim=1) / sqrt(mc_iters)
+        logging.info(confidences)
+        lb = means - n_sigmas * confidences
+        logging.info(lb)
+        solution_idx = torch.where(lb > thresh)[0]
+        mus = means[solution_idx]
+        sigmas = n_sigmas * confidences[solution_idx]
+        solution_idx = set(solution_idx.tolist())
 
         return (solution_idx, mus, sigmas)
 
