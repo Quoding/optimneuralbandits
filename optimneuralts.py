@@ -236,21 +236,17 @@ class OptimNeuralTS:
             tuple: tuple containing idx of solution, the predicted mean and the `n_sigma` confidence around the mean
         """
         assert self.sampletype == "f"
-        import logging
 
         mus = []
         sigmas = []
         # First pass, weed out vectors with small activs so we don't waste time in the loop to extract solutions
         activs = [self.net(vecs) for _ in range(mc_iters)]
         activs = torch.cat(activs, dim=1)
-        logging.info(activs)
 
         means = activs.mean(dim=1)
-        logging.info(means)
         confidences = activs.std(dim=1) / sqrt(mc_iters)
-        logging.info(confidences)
         lb = means - n_sigmas * confidences
-        logging.info(lb)
+
         solution_idx = torch.where(lb > thresh)[0]
         mus = means[solution_idx]
         sigmas = n_sigmas * confidences[solution_idx]
