@@ -114,6 +114,7 @@ class OptimNeuralTS:
         lds=False,
         n_train=-1,
         use_decay=False,
+        update_ensemble=False,
     ):
         n_dataset = len(self.train_dataset)
         # For full batch grad descent
@@ -188,7 +189,12 @@ class OptimNeuralTS:
         # Set the net to the best in model selection loss we've seen
         # Deep copy to ensure no remaining references to the early_stop object
         self.net = deepcopy(early_stop.best_model)
-        self.ensemble.add_model(deepcopy(self.net))
+
+        # For performance reason when using DE, it's sometimes desirable
+        # to disable the update of the ensemble as deepcopy becomes
+        # time consuming
+        if update_ensemble:
+            self.ensemble.add_model(deepcopy(self.net))
         return stored_loss.detach().item()
 
     def find_solution_in_vecs(self, vecs, thresh, n_sigmas):
