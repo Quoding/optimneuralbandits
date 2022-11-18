@@ -101,7 +101,7 @@ def make_deterministic(seed):
 
 
 def project_point(point):
-    return torch.tensor([1, point, point ** 2, point ** 3, point ** 4, point ** 5]).to(
+    return torch.tensor([1, point, point**2, point**3, point**4, point**5]).to(
         device
     )
 
@@ -301,7 +301,7 @@ for algo in algos:
             # Playing
             for j in range(n_trials):
                 a_t, idx, best_member_grad = do_gradient_optim(
-                    agent, 3 * 60, x, lr=1e-2
+                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
                 )
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
@@ -437,7 +437,9 @@ for algo in algos:
             # Playing
             for j in range(n_trials):
                 agent.net.train()
-                a_t, idx, best_member_grad = do_gradient_optim(agent, 60, x, lr=1e-2)
+                a_t, idx, best_member_grad = do_gradient_optim(
+                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
+                )
                 agent.net.eval()
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
@@ -563,7 +565,9 @@ for algo in algos:
             for j in range(n_trials):
                 agent.net.train()
 
-                a_t, idx, best_member_grad = do_gradient_optim(agent, 60, x, lr=1e-2)
+                a_t, idx, best_member_grad = do_gradient_optim(
+                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
+                )
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
                 if best_member_grad is None:
