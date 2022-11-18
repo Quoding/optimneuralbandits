@@ -336,11 +336,11 @@ for algo in algos:
                 logging.info(f"Found no solution for run {i}")
                 metrics_dict[algo][str(exploration_mult)]["fails"] += 1
 
-                plot_estimate(
-                    agent,
-                    n_trials,
-                    fn=f"grad_no_sol_{algo}_expl_{exploration_mult}_100_trials_seed_{i}",
-                )
+                # plot_estimate(
+                #     agent,
+                #     n_trials,
+                #     fn=f"grad_no_sol_{algo}_expl_{exploration_mult}_100_trials_seed_{i}",
+                # )
 
             logging.info(
                 f"jaccard: {jaccard}, percent_inter: {percent_inter}, percent_found: {percent_found}"
@@ -475,11 +475,11 @@ for algo in algos:
 
             if n_sol == 0:
                 logging.info(f"Found no solution for run {i}")
-                plot_estimate(
-                    agent,
-                    n_trials,
-                    fn=f"grad_no_sol_{algo}_decay_expl_{exploration_mult}_100_trials_seed_{i}",
-                )
+                # plot_estimate(
+                #     agent,
+                #     n_trials,
+                #     fn=f"grad_no_sol_{algo}_decay_expl_{exploration_mult}_100_trials_seed_{i}",
+                # )
                 metrics_dict[algo][str(exploration_mult)]["fails"] += 1
 
             logging.info(
@@ -606,11 +606,11 @@ for algo in algos:
                 logging.info(f"Found no solution for run {i}")
                 metrics_dict[algo][str(dropout_rate)]["fails"] += 1
 
-                plot_estimate(
-                    agent,
-                    n_trials,
-                    fn=f"grad_no_sol_{algo}_drop_{dropout_rate}_100_trials_seed_{i}.png",
-                )
+                # plot_estimate(
+                #     agent,
+                #     n_trials,
+                #     fn=f"grad_no_sol_{algo}_drop_{dropout_rate}_100_trials_seed_{i}.png",
+                # )
 
             logging.info(
                 f"jaccard: {jaccard}, percent_inter: {percent_inter}, percent_found: {percent_found}"
