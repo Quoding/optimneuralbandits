@@ -101,7 +101,7 @@ def make_deterministic(seed):
 
 
 def project_point(point):
-    return torch.tensor([1, point, point ** 2, point ** 3, point ** 4, point ** 5]).to(
+    return torch.tensor([1, point, point**2, point**3, point**4, point**5]).to(
         device
     )
 
@@ -301,7 +301,7 @@ for algo in algos:
             # Playing
             for j in range(n_trials):
                 a_t, idx, best_member_grad = do_gradient_optim(
-                    agent, 3 * 60, x, lr=1e-2
+                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
                 )
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
@@ -336,11 +336,11 @@ for algo in algos:
                 logging.info(f"Found no solution for run {i}")
                 metrics_dict[algo][str(exploration_mult)]["fails"] += 1
 
-                plot_estimate(
-                    agent,
-                    n_trials,
-                    fn=f"grad_no_sol_{algo}_expl_{exploration_mult}_100_trials_seed_{i}",
-                )
+                # plot_estimate(
+                #     agent,
+                #     n_trials,
+                #     fn=f"grad_no_sol_{algo}_expl_{exploration_mult}_100_trials_seed_{i}",
+                # )
 
             logging.info(
                 f"jaccard: {jaccard}, percent_inter: {percent_inter}, percent_found: {percent_found}"
@@ -437,7 +437,9 @@ for algo in algos:
             # Playing
             for j in range(n_trials):
                 agent.net.train()
-                a_t, idx, best_member_grad = do_gradient_optim(agent, 60, x, lr=1e-2)
+                a_t, idx, best_member_grad = do_gradient_optim(
+                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
+                )
                 agent.net.eval()
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
@@ -473,11 +475,11 @@ for algo in algos:
 
             if n_sol == 0:
                 logging.info(f"Found no solution for run {i}")
-                plot_estimate(
-                    agent,
-                    n_trials,
-                    fn=f"grad_no_sol_{algo}_decay_expl_{exploration_mult}_100_trials_seed_{i}",
-                )
+                # plot_estimate(
+                #     agent,
+                #     n_trials,
+                #     fn=f"grad_no_sol_{algo}_decay_expl_{exploration_mult}_100_trials_seed_{i}",
+                # )
                 metrics_dict[algo][str(exploration_mult)]["fails"] += 1
 
             logging.info(
@@ -563,7 +565,9 @@ for algo in algos:
             for j in range(n_trials):
                 agent.net.train()
 
-                a_t, idx, best_member_grad = do_gradient_optim(agent, 60, x, lr=1e-2)
+                a_t, idx, best_member_grad = do_gradient_optim(
+                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
+                )
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
                 if best_member_grad is None:
@@ -602,11 +606,11 @@ for algo in algos:
                 logging.info(f"Found no solution for run {i}")
                 metrics_dict[algo][str(dropout_rate)]["fails"] += 1
 
-                plot_estimate(
-                    agent,
-                    n_trials,
-                    fn=f"grad_no_sol_{algo}_drop_{dropout_rate}_100_trials_seed_{i}.png",
-                )
+                # plot_estimate(
+                #     agent,
+                #     n_trials,
+                #     fn=f"grad_no_sol_{algo}_drop_{dropout_rate}_100_trials_seed_{i}.png",
+                # )
 
             logging.info(
                 f"jaccard: {jaccard}, percent_inter: {percent_inter}, percent_found: {percent_found}"

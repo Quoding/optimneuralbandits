@@ -461,7 +461,7 @@ def parse_args():
     return args
 
 
-def do_gradient_optim(agent, n_steps, existing_vecs, lr):
+def do_gradient_optim(agent, n_steps, existing_vecs, lr, bounds=[0, 1]):
     # Generate a random vector to optimize
     sample_idx = random.randint(
         0, len(existing_vecs) - 1
@@ -517,7 +517,7 @@ def do_gradient_optim(agent, n_steps, existing_vecs, lr):
     # Coerce to an existing vector via L1 norm
     a_t, idx = change_to_closest_existing_vector(best_vec, existing_vecs)
     # Take the wanted vector in binary form, so we can compute a decent gradient on it
-    clipped_and_rounded_vec = torch.round(torch.clip(best_vec, 0, 1))
+    clipped_and_rounded_vec = torch.round(torch.clip(best_vec, *bounds))
     _, g_list = agent.compute_activation_and_grad(clipped_and_rounded_vec)
 
     return a_t, idx, g_list
@@ -717,7 +717,7 @@ def build_histogram(targets, factor, bin_size):
 def gaussian_fn(size, std):
     n = torch.arange(0, size) - (size - 1.0) / 2.0
     sig2 = 2 * std * std
-    w = torch.exp(-(n ** 2) / sig2)
+    w = torch.exp(-(n**2) / sig2)
     return w
 
 
