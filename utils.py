@@ -1,7 +1,7 @@
 import argparse
 import json
-import os
 import logging
+import os
 import random
 from copy import deepcopy
 from math import ceil, floor, isnan
@@ -394,7 +394,7 @@ def parse_args():
     parser.add_argument(
         "--pop_lr",
         type=float,
-        default=1e-2,
+        default=1e-3,
         help="Learning rate for the population optimizer (if gradient based)",
     )
     parser.add_argument(
@@ -717,7 +717,7 @@ def build_histogram(targets, factor, bin_size):
 def gaussian_fn(size, std):
     n = torch.arange(0, size) - (size - 1.0) / 2.0
     sig2 = 2 * std * std
-    w = torch.exp(-(n**2) / sig2)
+    w = torch.exp(-(n ** 2) / sig2)
     return w
 
 
