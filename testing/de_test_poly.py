@@ -180,6 +180,11 @@ logging.info("Warm up over. Computing metrics...")
     all_flagged_combis_idx,
     all_flagged_pats_idx,
 )
+with torch.no_grad():
+    dataset_activ = agent.net(combis)
+    dataset_loss = agent.loss_func(dataset_activ, risks)
+    dataset_losses.append(dataset_loss.item())
+
 logging.info(
     f"recall: {recall}, precision: {precision}, ratio of patterns found: {percent_found_pat}, n_inter: {n_inter}"
 )
