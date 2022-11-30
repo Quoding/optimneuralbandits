@@ -29,7 +29,8 @@ config = Config(default_config)
 bounds = [-2.5, 1.5]
 theta = torch.Tensor([0, 3, -2, -4, 1, 1]).to(device)
 d = 1
-torch.set_default_tensor_type("torch.cuda.FloatTensor")
+if device == torch.device("cuda"):
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
 # %% [markdown]
 # # Classes
@@ -215,9 +216,9 @@ def find_best_member(eval_fn, set_existing_vecs, de_config, seed):
 
     de = DE(config)
     de.train()
-    a = de.population[de.current_best].params
+    a = de.population[de.current_best].params.data
     a_idx = torch.argmin(torch.abs(a - set_existing_vecs))
-    de.population[de.current_best].params = set_existing_vecs[a_idx]
+    de.population[de.current_best].params.data = set_existing_vecs[a_idx]
     return de.population[de.current_best]
 
 

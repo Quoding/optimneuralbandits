@@ -30,44 +30,11 @@ config = Config(default_config)
 bounds = [-2.5, 1.5]
 theta = torch.Tensor([0, 3, -2, -4, 1, 1]).to(device)
 d = 1
-torch.set_default_tensor_type("torch.cuda.FloatTensor")
+if device == torch.device("cuda"):
+    torch.set_default_tensor_type("torch.cuda.FloatTensor")
 
 # %% [markdown]
 # # Classes
-
-# %%
-class PullPolicy(Policy):
-    def __init__(self, eval_fn):
-        super().__init__()
-        self.point = torch.FloatTensor(1).uniform_(*bounds).to(device)
-        self.params = nn.Parameter(self.point, requires_grad=False)
-        self.eval_fn = eval_fn
-        self.ucb = None
-
-    def evaluate(self):
-        self.transform()
-        ucb, activation_grad, _, _ = self.eval_fn(self.point)
-        ucb = ucb.detach().item()
-        self.activation_grad = activation_grad
-        self.ucb = ucb
-        # logging.info(self.point)
-        # logging.info(ucb)
-        return ucb
-
-    def transform(self):
-        self.point = torch.clip(self.params, *bounds).to(device)
-        self.params = nn.Parameter(self.point, requires_grad=False)
-        # return generate_feature_vector_from_point(self.point)
-
-
-class DEConfig:
-    n_step: int = 3
-    population_size: int = 60
-    differential_weight: float = 0.8
-    crossover_probability: float = 0.9
-    strategy: Strategy = Strategy.best1bin
-    seed: int = "does not matter"
-
 
 # %% [markdown]
 # # Utility
@@ -203,23 +170,6 @@ def plot_estimate(agent, trial, fn=None, title=""):
     plt.clf()
 
 
-def find_best_member(eval_fn, de_config, seed):
-    de_config.seed = seed
-    config = Config(default_config)
-
-    @config("policy")
-    class PolicyConfig:
-        policy: Type[Policy] = PullPolicy
-        eval_fn: object = agent.get_sample
-
-    config("de")(de_config)
-
-    de = DE(config)
-    de.train()
-
-    return de.population[de.current_best]
-
-
 # %% [markdown]
 # # Train all runs, for all algos and every exploration
 
@@ -268,9 +218,6 @@ for algo in algos:
             reg = 1
             delay = 0
             reward_fn = reward_fn
-            de_config = DEConfig
-            de_policy = PullPolicy
-            lr = 1e-2
 
             if algo == "UCB":
                 agent = OptimNeuralTS(
@@ -403,9 +350,6 @@ for algo in algos:
             net = NetworkDropout(d, width).to(device)
             reg = 1
             reward_fn = reward_fn
-            de_config = DEConfig
-            de_policy = PullPolicy
-            lr = 1e-2
 
             if algo == "UCB":
                 agent = OptimNeuralTS(
@@ -551,8 +495,6 @@ for algo in algos:
             reg = 1
             sampletype = "f"
             reward_fn = reward_fn
-            de_config = DEConfig
-            de_policy = PullPolicy
             bern_p = 1 - dropout_rate
             p_vec = torch.tensor([bern_p] * width)
 
