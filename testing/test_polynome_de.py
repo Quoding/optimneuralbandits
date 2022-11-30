@@ -100,7 +100,7 @@ def make_deterministic(seed):
 
 
 def project_point(point):
-    return torch.tensor([1, point, point**2, point**3, point**4, point**5]).to(
+    return torch.tensor([1, point, point ** 2, point ** 3, point ** 4, point ** 5]).to(
         device
     )
 
@@ -202,7 +202,7 @@ def plot_estimate(agent, trial, fn=None, title=""):
     plt.clf()
 
 
-def find_best_member(eval_fn, de_config, seed):
+def find_best_member(eval_fn, set_existing_vecs, de_config, seed):
     de_config.seed = seed
     config = Config(default_config)
 
@@ -215,7 +215,9 @@ def find_best_member(eval_fn, de_config, seed):
 
     de = DE(config)
     de.train()
-
+    a = de.population[de.current_best].params
+    a_idx = torch.argmin(torch.abs(a - set_existing_vecs))
+    de.population[de.current_best].params = set_existing_vecs[a_idx]
     return de.population[de.current_best]
 
 
@@ -296,13 +298,13 @@ for algo in algos:
             agent.train_dataset.set_(vecs, rewards)
 
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False)
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
             agent.net.eval()
 
             # Playing
             for j in range(n_trials):
                 best_member = find_best_member(
-                    agent.get_sample, de_config=de_config, seed=j
+                    agent.get_sample, x, de_config=de_config, seed=j
                 )
                 best_member_grad = best_member.activation_grad
                 a_t = best_member.point.unsqueeze(0)
@@ -313,7 +315,7 @@ for algo in algos:
                 agent.train_dataset.add(a_t, r_t)
 
                 agent.net.train()
-                agent.train(max_n_steps, patience=max_n_steps, lds=False)
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
                 agent.net.eval()
 
             # Stop using mask in evaluation
@@ -432,12 +434,18 @@ for algo in algos:
                 agent.U += grad * grad
 
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False, use_decay=True)
+            agent.train(
+                max_n_steps,
+                patience=max_n_steps,
+                lds=False,
+                use_decay=True,
+                lr="plateau",
+            )
             agent.net.eval()
             # Playing
             for j in range(n_trials):
                 best_member = find_best_member(
-                    agent.get_sample, de_config=de_config, seed=j
+                    agent.get_sample, x, de_config=de_config, seed=j
                 )
                 best_member_grad = best_member.activation_grad
                 a_t = best_member.point.unsqueeze(0)
@@ -449,7 +457,11 @@ for algo in algos:
 
                 agent.net.train()
                 agent.train(
-                    max_n_steps, patience=max_n_steps, lds=False, use_decay=True
+                    max_n_steps,
+                    patience=max_n_steps,
+                    lds=False,
+                    use_decay=True,
+                    lr="plateau",
                 )
                 agent.net.eval()
 
@@ -555,14 +567,14 @@ for algo in algos:
                 agent.U += grad * grad
 
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False)
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
             # agent.net.eval()
 
             # Train
             for j in range(n_trials):
                 agent.net.train()
                 best_member = find_best_member(
-                    agent.get_sample, de_config=de_config, seed=j
+                    agent.get_sample, x, de_config=de_config, seed=j
                 )
                 best_member_grad = best_member.activation_grad
                 a_t = best_member.point.unsqueeze(0)
@@ -574,7 +586,7 @@ for algo in algos:
 
                 agent.train_dataset.add(a_t, r_t)
 
-                agent.train(max_n_steps, patience=max_n_steps, lds=False)
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
                 # agent.net.eval()
 
             if best_member_grad is None:

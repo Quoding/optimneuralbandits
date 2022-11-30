@@ -101,7 +101,7 @@ def make_deterministic(seed):
 
 
 def project_point(point):
-    return torch.tensor([1, point, point**2, point**3, point**4, point**5]).to(
+    return torch.tensor([1, point, point ** 2, point ** 3, point ** 4, point ** 5]).to(
         device
     )
 
@@ -295,13 +295,13 @@ for algo in algos:
 
             agent.train_dataset.set_(vecs, rewards)
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False)
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
             agent.net.eval()
 
             # Playing
             for j in range(n_trials):
                 a_t, idx, best_member_grad = do_gradient_optim(
-                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
+                    agent, 3 * 60, x, lr=1e-3, bounds=bounds
                 )
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
@@ -310,7 +310,7 @@ for algo in algos:
                 agent.train_dataset.add(a_t, r_t)
 
                 agent.net.train()
-                agent.train(max_n_steps, patience=max_n_steps, lds=False)
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
                 agent.net.eval()
 
             sol, _, _ = agent.find_solution_in_vecs(x, 0, n_sigmas=n_sigmas)
@@ -431,14 +431,20 @@ for algo in algos:
                 agent.U += grad * grad
 
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False, use_decay=True)
+            agent.train(
+                max_n_steps,
+                patience=max_n_steps,
+                lds=False,
+                use_decay=True,
+                lr="plateau",
+            )
             agent.net.eval()
 
             # Playing
             for j in range(n_trials):
                 agent.net.train()
                 a_t, idx, best_member_grad = do_gradient_optim(
-                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
+                    agent, 3 * 60, x, lr=1e-3, bounds=bounds
                 )
                 agent.net.eval()
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
@@ -449,7 +455,11 @@ for algo in algos:
 
                 agent.net.train()
                 agent.train(
-                    max_n_steps, patience=max_n_steps, lds=False, use_decay=True
+                    max_n_steps,
+                    patience=max_n_steps,
+                    lds=False,
+                    use_decay=True,
+                    lr="plateau",
                 )
                 agent.net.eval()
 
@@ -559,14 +569,14 @@ for algo in algos:
 
                 # agent.net.eval()
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False)
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
 
             # Train
             for j in range(n_trials):
                 agent.net.train()
 
                 a_t, idx, best_member_grad = do_gradient_optim(
-                    agent, 3 * 60, x, lr=1e-2, bounds=bounds
+                    agent, 3 * 60, x, lr=1e-3, bounds=bounds
                 )
                 r_t = reward_fn(a_t).unsqueeze(0).unsqueeze(0)
 
@@ -577,7 +587,7 @@ for algo in algos:
                 agent.train_dataset.add(a_t, r_t)
 
                 # agent.net.eval()
-                agent.train(max_n_steps, patience=max_n_steps, lds=False)
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
 
             if best_member_grad is None:
                 metrics_dict[algo][str(dropout_rate)]["fails"] += 1
