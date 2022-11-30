@@ -218,7 +218,7 @@ def find_best_member(eval_fn, set_existing_vecs, de_config, seed):
     de.train()
     a = de.population[de.current_best].params.data
     a_idx = torch.argmin(torch.abs(a - set_existing_vecs))
-    de.population[de.current_best].params.data = set_existing_vecs[a_idx]
+    de.population[de.current_best].params.data = set_existing_vecs[a_idx].clone()
     return de.population[de.current_best]
 
 
