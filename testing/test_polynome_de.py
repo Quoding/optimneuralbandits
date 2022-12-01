@@ -357,6 +357,9 @@ for algo in algos:
 torch.save(metrics_dict, f"metrics_dict_exp_synth_{max_n_steps}_basic.pth")
 
 
+logging.info("DE_REG")
+logging.info("DE_REG")
+logging.info("DE_REG")
 # %%
 for algo in metrics_dict.keys():
     logging.info(f"Algo: {algo}")
@@ -365,7 +368,7 @@ for algo in metrics_dict.keys():
         for metric in metrics_dict[algo][expl_mult].keys():
             logging.info(f"Metric: {metric}")
             logging.info(
-                f"mean: {np.mean(metrics_dict[algo][expl_mult][metric])} +- {np.std(metrics_dict[algo][expl_mult][metric])} "
+                f"mean: {np.nanmean(metrics_dict[algo][expl_mult][metric])} +- {np.nanstd(metrics_dict[algo][expl_mult][metric])} "
             )
             logging.info(
                 f"interval:  [{np.min(metrics_dict[algo][expl_mult][metric])}, {np.max(metrics_dict[algo][expl_mult][metric])}]"
@@ -501,7 +504,9 @@ for algo in algos:
 
 torch.save(metrics_dict, f"metrics_dict_exp_synth_{max_n_steps}_decay.pth")
 
-
+logging.info("DE_L2")
+logging.info("DE_L2")
+logging.info("DE_L2")
 # %%
 for algo in metrics_dict.keys():
     logging.info(f"Algo: {algo}")
@@ -510,7 +515,7 @@ for algo in metrics_dict.keys():
         for metric in metrics_dict[algo][expl_mult].keys():
             logging.info(f"Metric: {metric}")
             logging.info(
-                f"mean: {np.mean(metrics_dict[algo][expl_mult][metric])} +- {np.std(metrics_dict[algo][expl_mult][metric])} "
+                f"mean: {np.nanmean(metrics_dict[algo][expl_mult][metric])} +- {np.nanstd(metrics_dict[algo][expl_mult][metric])} "
             )
             logging.info(
                 f"interval:  [{np.min(metrics_dict[algo][expl_mult][metric])}, {np.max(metrics_dict[algo][expl_mult][metric])}]"
@@ -631,6 +636,9 @@ torch.save(metrics_dict, f"metrics_dict_exp_synth_{max_n_steps}_dropout.pth")
 
 
 # %%
+logging.info("DE_DROPOUT")
+logging.info("DE_DROPOUT")
+logging.info("DE_DROPOUT")
 for algo in metrics_dict.keys():
     logging.info(f"Algo: {algo}")
     for dropout_rate in metrics_dict[algo].keys():
@@ -638,7 +646,7 @@ for algo in metrics_dict.keys():
         for metric in metrics_dict[algo][dropout_rate].keys():
             logging.info(f"Metric: {metric}")
             logging.info(
-                f"mean: {np.mean(metrics_dict[algo][dropout_rate][metric])} +- {np.std(metrics_dict[algo][dropout_rate][metric])} "
+                f"mean: {np.nanmean(metrics_dict[algo][dropout_rate][metric])} +- {np.nanstd(metrics_dict[algo][dropout_rate][metric])} "
             )
             logging.info(
                 f"interval:  [{np.min(metrics_dict[algo][dropout_rate][metric])}, {np.max(metrics_dict[algo][dropout_rate][metric])}]"
