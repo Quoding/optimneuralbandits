@@ -299,7 +299,7 @@ for algo in algos:
             agent.train_dataset.set_(vecs, rewards)
 
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
             agent.net.eval()
 
             # Playing
@@ -316,7 +316,7 @@ for algo in algos:
                 agent.train_dataset.add(a_t, r_t)
 
                 agent.net.train()
-                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
                 agent.net.eval()
 
             # Stop using mask in evaluation
@@ -440,7 +440,7 @@ for algo in algos:
                 patience=max_n_steps,
                 lds=False,
                 use_decay=True,
-                lr="plateau",
+                lr=1e-2,
             )
             agent.net.eval()
             # Playing
@@ -462,7 +462,7 @@ for algo in algos:
                     patience=max_n_steps,
                     lds=False,
                     use_decay=True,
-                    lr="plateau",
+                    lr=1e-2,
                 )
                 agent.net.eval()
 
@@ -568,7 +568,7 @@ for algo in algos:
                 agent.U += grad * grad
 
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
             # agent.net.eval()
 
             # Train
@@ -587,7 +587,7 @@ for algo in algos:
 
                 agent.train_dataset.add(a_t, r_t)
 
-                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
                 # agent.net.eval()
 
             if best_member_grad is None:

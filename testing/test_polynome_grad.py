@@ -242,7 +242,7 @@ for algo in algos:
 
             agent.train_dataset.set_(vecs, rewards)
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
             agent.net.eval()
 
             # Playing
@@ -257,7 +257,7 @@ for algo in algos:
                 agent.train_dataset.add(a_t, r_t)
 
                 agent.net.train()
-                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
                 agent.net.eval()
 
             sol, _, _ = agent.find_solution_in_vecs(x, 0, n_sigmas=n_sigmas)
@@ -380,7 +380,7 @@ for algo in algos:
                 patience=max_n_steps,
                 lds=False,
                 use_decay=True,
-                lr="plateau",
+                lr=1e-2,
             )
             agent.net.eval()
 
@@ -403,7 +403,7 @@ for algo in algos:
                     patience=max_n_steps,
                     lds=False,
                     use_decay=True,
-                    lr="plateau",
+                    lr=1e-2,
                 )
                 agent.net.eval()
 
@@ -511,7 +511,7 @@ for algo in algos:
 
                 # agent.net.eval()
             agent.net.train()
-            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+            agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
 
             # Train
             for j in range(n_trials):
@@ -529,7 +529,7 @@ for algo in algos:
                 agent.train_dataset.add(a_t, r_t)
 
                 # agent.net.eval()
-                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr="plateau")
+                agent.train(max_n_steps, patience=max_n_steps, lds=False, lr=1e-2)
 
             if best_member_grad is None:
                 metrics_dict[algo][str(dropout_rate)]["fails"] += 1
