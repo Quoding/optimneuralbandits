@@ -328,7 +328,7 @@ for algo in algos:
             jaccard, n_inter = compute_jaccard(sol, true_sol_idx)
             percent_found = n_inter / n_true_sol
             if n_sol == 0:
-                percent_inter = 0
+                percent_inter = float("nan")
             else:
                 percent_inter = n_inter / n_sol
 
@@ -474,7 +474,7 @@ for algo in algos:
             jaccard, n_inter = compute_jaccard(sol, true_sol_idx)
             percent_found = n_inter / n_true_sol
             if n_sol == 0:
-                percent_inter = 0
+                percent_inter = float("nan")
             else:
                 percent_inter = n_inter / n_sol
 
@@ -604,7 +604,7 @@ for algo in algos:
             jaccard, n_inter = compute_jaccard(sol, true_sol_idx)
             percent_found = n_inter / n_true_sol
             if n_sol == 0:
-                percent_inter = 0
+                percent_inter = float("nan")
             else:
                 percent_inter = n_inter / n_sol
 
