@@ -7,6 +7,7 @@ plt.rcParams.update(
         "text.usetex": True,
         "font.family": "serif",
         # "font.sans-serif": "Computer Modern",
+        # "text.latex.preamble": [r"\usepackage[varvw]{newtxmath}"],
     }
 )
 
@@ -18,7 +19,7 @@ def set_size(width, fraction=1):
     ----------
     width: float
             Document textwidth or columnwidth in pts
-    fraction: float, optional
+    fraction: float, optional "aaai"
             Fraction of the width which you wish the figure to occupy
 
     Returns
@@ -28,6 +29,10 @@ def set_size(width, fraction=1):
     """
     if width == "aaai":
         width = 239.39438
+    elif width == "springer":
+        width = 332.89723
+    elif width == "memoire":
+        width == 443
     # Width of figure (in pts)
     fig_width_pt = width * fraction
 
