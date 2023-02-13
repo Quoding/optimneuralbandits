@@ -22,6 +22,6 @@ WIDTH=128
 for i in {0..24}
 do
 # echo $i
-python random_baseline.py -d $DATASET -t 1.1 -T $TRIALS -o saves/${DATASET}_random_baseline -s $i --batch_size $BS --warmup $WARMUP --pop_n_members $N_MEMBERS --valtype $VALTYPE --lds $LDS --train_every $TRAINEVR --usedecay --patience $PATIENCE --lr $LR --layers $LAYERS -e $EXPL --nobatchnorm
+python seq_random_baseline.py -d $DATASET -t 1.1 -T $TRIALS -o saves/${DATASET}_random_baseline -s $i --batch_size $BS --warmup $WARMUP --pop_n_members $N_MEMBERS --valtype $VALTYPE --lds $LDS --train_every $TRAINEVR --usedecay --patience $PATIENCE --lr $LR --layers $LAYERS -e $EXPL --nobatchnorm
 
 done
